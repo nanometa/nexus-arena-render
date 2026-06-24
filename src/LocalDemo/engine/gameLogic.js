@@ -78,6 +78,7 @@ function instantiate(template, side, index) {
     ability: template.ability,
     artwork: template.artwork,
     attackedThisTurn: false,
+    summonedThisTurn: false,
   };
 }
 
@@ -103,7 +104,10 @@ function beginActiveTurn(state) {
   const player = state.players[state.activeSide];
   // reset attack flags for the active side's field cards
   player.field.forEach((c) => {
-    if (c) c.attackedThisTurn = false;
+    if (c) {
+      c.attackedThisTurn = false;
+      c.summonedThisTurn = false;
+    }
   });
   state.flags.summonedThisTurn = false;
   // draw 1
@@ -253,6 +257,7 @@ export function summon(state, side, handIndex, opts = {}) {
 
   player.hand.splice(handIndex, 1);
   card.attackedThisTurn = false; // can attack the turn it is summoned
+  card.summonedThisTurn = true;
   player.field[slot] = card;
   next.flags.summonedThisTurn = true;
   next.log.push(`${sideLabel(side)} invoque ${card.name} (puissance ${card.power}).`);

@@ -13,6 +13,7 @@ import {
 } from './engine/gameLogic';
 import { RARITY } from './engine/cards';
 import { playBotTurn } from './engine/bot';
+import GameCard from './components/GameCard';
 import './LocalDemo.css';
 
 const BOT_DELAY_MS = 700;
@@ -32,51 +33,6 @@ function reducer(state, action) {
     default:
       return state;
   }
-}
-
-/** Presentational card with a CSS element-colored placeholder + optional artwork image. */
-function CardView({ card, faceDown, selected, selectable, isTarget, badge, onClick }) {
-  if (faceDown) {
-    return <div className="demo-card demo-card--back" aria-label="carte cachée" />;
-  }
-  if (!card) {
-    return <div className="demo-card demo-card--empty">Emplacement libre</div>;
-  }
-  const cls = [
-    'demo-card',
-    `elem-${card.element}`,
-    card.rarity === RARITY.LEGENDARY ? 'demo-card--legendary' : '',
-    selected ? 'is-selected' : '',
-    selectable ? 'is-selectable' : '',
-    isTarget ? 'is-target' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return (
-    <div className={cls} onClick={onClick} role={onClick ? 'button' : undefined}>
-      {/* artwork is loaded if available; otherwise the CSS placeholder (background) shows */}
-      <img
-        className="demo-card__art"
-        src={card.artwork}
-        alt=""
-        onError={(e) => {
-          e.currentTarget.style.display = 'none';
-        }}
-      />
-      <div className="demo-card__overlay">
-        <div className="demo-card__top">
-          <span className="demo-card__name">{card.name}</span>
-          <span className="demo-card__elem">{card.element}</span>
-        </div>
-        <div className="demo-card__bottom">
-          <span className="demo-card__power">{card.power}</span>
-          {card.rarity === RARITY.LEGENDARY && <span className="demo-card__rarity">★ Légendaire</span>}
-        </div>
-      </div>
-      {badge && <span className="demo-card__badge">{badge}</span>}
-    </div>
-  );
 }
 
 function HpBar({ side, hp, max }) {
@@ -190,27 +146,36 @@ export default function LocalDemo({ onExit }) {
     return (
       <div className="field-row">
         {p.field.map((card, i) => {
+          if (!card) {
+            return <GameCard key={`${side}-empty-${i}`} empty />;
+          }
           if (side === SIDES.PLAYER) {
-            const selectable =
-              isPlayerTurn && card && canAttack(game, SIDES.PLAYER, card.instanceId).ok;
+            const canAtk = isPlayerTurn && canAttack(game, SIDES.PLAYER, card.instanceId).ok;
             return (
-              <CardView
-                key={`pf-${i}`}
+              <GameCard
+                key={`pf-${card.instanceId}`}
                 card={card}
-                selectable={selectable}
-                selected={card && selectedAttacker === card.instanceId}
-                badge={card && card.attackedThisTurn ? '✔' : null}
-                onClick={card ? () => handleSelectAttacker(card.instanceId) : undefined}
+                selectable={canAtk}
+                canAttack={canAtk}
+                selected={selectedAttacker === card.instanceId}
+                hasAttacked={card.attackedThisTurn}
+                summoned={card.summonedThisTurn}
+                onClick={() => handleSelectAttacker(card.instanceId)}
               />
             );
           }
-          // bot field
-          const isTarget = targeting && !targeting.direct && card && targeting.targets.includes(card.instanceId);
+          const isTarget = !!(
+            targeting &&
+            !targeting.direct &&
+            targeting.targets.includes(card.instanceId)
+          );
           return (
-            <CardView
-              key={`bf-${i}`}
+            <GameCard
+              key={`bf-${card.instanceId}`}
               card={card}
-              isTarget={isTarget}
+              target={isTarget}
+              hasAttacked={card.attackedThisTurn}
+              summoned={card.summonedThisTurn}
               onClick={isTarget ? () => handleAttackTarget(card.instanceId) : undefined}
             />
           );
@@ -224,12 +189,20 @@ export default function LocalDemo({ onExit }) {
       <header className="ld-header">
         <h1>Démo locale — Joueur vs Bot</h1>
         <div className="ld-header__meta">
-          <span className="ld-turn">Tour {game.turn} / {game.config.maxTurns}</span>
+          <span className="ld-turn">
+            Tour {game.turn} / {game.config.maxTurns}
+          </span>
           <span className={`ld-active ld-active--${game.activeSide}`}>
             {game.result ? 'Partie terminée' : isPlayerTurn ? 'À vous de jouer' : 'Tour du bot…'}
           </span>
-          <button className="ld-btn" onClick={handleNewGame}>Rejouer</button>
-          {onExit && <button className="ld-btn ld-btn--ghost" onClick={onExit}>Menu</button>}
+          <button className="ld-btn" onClick={handleNewGame}>
+            Rejouer
+          </button>
+          {onExit && (
+            <button className="ld-btn ld-btn--ghost" onClick={onExit}>
+              Menu
+            </button>
+          )}
         </div>
       </header>
 
@@ -245,7 +218,7 @@ export default function LocalDemo({ onExit }) {
         </div>
         <div className="hand hand--bot">
           {bot.hand.map((_, i) => (
-            <CardView key={`bh-${i}`} faceDown />
+            <GameCard key={`bh-${i}`} faceDown />
           ))}
         </div>
         {renderField(SIDES.BOT)}
@@ -280,7 +253,7 @@ export default function LocalDemo({ onExit }) {
                 : isPlayerTurn && canSummon(game, SIDES.PLAYER, i).ok;
             return (
               <div className="hand-card" key={`ph-${card.instanceId}`}>
-                <CardView card={card} />
+                <GameCard card={card} disabled={!summonable} />
                 <button
                   className="ld-btn ld-btn--summon"
                   disabled={!summonable}
@@ -306,9 +279,12 @@ export default function LocalDemo({ onExit }) {
       <section className="log">
         <h2>Journal</h2>
         <ul>
-          {game.log.slice(-8).reverse().map((line, i) => (
-            <li key={i}>{line}</li>
-          ))}
+          {game.log
+            .slice(-8)
+            .reverse()
+            .map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
         </ul>
       </section>
 
@@ -318,8 +294,14 @@ export default function LocalDemo({ onExit }) {
           <div className={`result-card result-card--${game.result}`}>
             <h2>{resultText}</h2>
             <p>{game.winnerReason}</p>
-            <button className="ld-btn ld-btn--attack" onClick={handleNewGame}>Rejouer</button>
-            {onExit && <button className="ld-btn ld-btn--ghost" onClick={onExit}>Retour au menu</button>}
+            <button className="ld-btn ld-btn--attack" onClick={handleNewGame}>
+              Rejouer
+            </button>
+            {onExit && (
+              <button className="ld-btn ld-btn--ghost" onClick={onExit}>
+                Retour au menu
+              </button>
+            )}
           </div>
         </div>
       )}

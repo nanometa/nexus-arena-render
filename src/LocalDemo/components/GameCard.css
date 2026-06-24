@@ -1,0 +1,158 @@
+/* GameCard — layered, responsive card. CSS fallbacks stand in for any missing asset. */
+
+/* Card size is driven by a CSS variable so it scales on desktop & mobile (see media query). */
+.game-card {
+  position: relative;
+  width: var(--card-w, 100px);
+  height: calc(var(--card-w, 100px) * 1.4);
+  border-radius: 9px;
+  overflow: hidden;
+  background: #2a2f3d; /* base fallback if no element color matched */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  flex: 0 0 auto;
+  color: #fff;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, outline-color 0.12s ease;
+}
+
+.game-card--empty {
+  border: 2px dashed #394052;
+  background: #161a24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #5b6377;
+  text-align: center;
+  padding: 4px;
+  box-shadow: none;
+}
+.game-card--back {
+  background: repeating-linear-gradient(45deg, #243b6b, #243b6b 8px, #1c2c52 8px, #1c2c52 16px);
+  border: 1px solid #34508f;
+}
+
+/* ---- Layer 1: artwork (object-fit avoids distortion) ---- */
+.game-card__art-layer { position: absolute; inset: 0; }
+.game-card__art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;     /* prevents illustration distortion (task 10) */
+  object-position: center top;
+  display: block;
+}
+
+/* Element-colored gradient = the artwork fallback (shown when the <img> fails/hides). */
+.elem-ELECTRIC { background: linear-gradient(160deg, #6d5bd0, #f2c94c); }
+.elem-FIRE     { background: linear-gradient(160deg, #7a1f1f, #ff7043); }
+.elem-WATER    { background: linear-gradient(160deg, #134e8c, #4fc3f7); }
+.elem-EARTH    { background: linear-gradient(160deg, #5d4037, #8bc34a); }
+.elem-NATURE   { background: linear-gradient(160deg, #1b5e20, #aed581); }
+.elem-SHADOW   { background: linear-gradient(160deg, #1a1330, #6a4f9c); }
+
+/* ---- Layer 2: frame (transparent PNG). Fallback = the CSS border below. ---- */
+.game-card__frame-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.16); /* CSS fallback frame */
+  border-radius: 9px;
+  box-sizing: border-box;
+}
+.game-card__frame { width: 100%; height: 100%; object-fit: fill; display: block; }
+.game-card--legendary .game-card__frame-layer { border-color: #ffd166; }
+
+/* ---- Layer 3: elemental icon. Fallback = emoji underneath the (possibly hidden) img. ---- */
+.game-card__icon-layer {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.game-card__icon-fallback { position: absolute; font-size: 13px; line-height: 1; }
+.game-card__icon { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+
+/* ---- Layer 4: text (never baked into images) ---- */
+.game-card__text-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+  padding: 5px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 40%, rgba(0, 0, 0, 0.72));
+}
+.game-card__name {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px #000;
+}
+.game-card__meta { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.game-card__element { font-size: 8px; letter-spacing: 0.4px; opacity: 0.9; }
+.game-card__rarity { font-size: 7px; padding: 1px 4px; border-radius: 999px; background: rgba(255,255,255,0.18); }
+.game-card__rarity--legendary { background: #ffd166; color: #1a1a1a; font-weight: 700; }
+.game-card__ability {
+  font-size: 8px;
+  line-height: 1.15;
+  opacity: 0.92;
+  max-height: 2.4em;
+  overflow: hidden;
+}
+.game-card__power {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  font-size: 19px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px #000;
+}
+
+/* badges */
+.game-card__badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.game-card__badge--attacked { background: #c0392b; color: #fff; }
+.game-card__badge--summoned { background: #2e7d57; color: #fff; }
+
+/* ---- visual states (CSS-driven) ---- */
+.game-card.is-selectable { cursor: pointer; outline: 2px solid #7CFC9B; }
+.game-card.can-attack { box-shadow: 0 0 8px rgba(124, 252, 155, 0.55), 0 2px 6px rgba(0,0,0,0.45); }
+.game-card.is-selected { outline: 3px solid #ffd166; transform: translateY(-6px); }
+.game-card.is-summoned { animation: card-pop 0.25s ease; }
+.game-card.has-attacked { filter: grayscale(0.5) brightness(0.8); }
+.game-card.is-target { outline: 3px solid #ff5252; cursor: crosshair; }
+.game-card.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.game-card.is-destroyed { animation: card-destroy 0.35s ease forwards; pointer-events: none; }
+
+@keyframes card-pop {
+  from { transform: scale(0.85); }
+  to { transform: scale(1); }
+}
+@keyframes card-destroy {
+  to { opacity: 0; transform: scale(0.7) rotate(-6deg); }
+}
+
+/* ---- responsive: smaller cards on mobile ---- */
+@media (max-width: 640px) {
+  .game-card__ability { display: none; }
+  .game-card__name { font-size: 11px; }
+  .game-card__power { font-size: 16px; }
+}

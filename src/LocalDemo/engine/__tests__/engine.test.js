@@ -122,6 +122,16 @@ describe('summon', () => {
     expect(r.state.players.player.hand).toHaveLength(0);
   });
 
+  test('marks the summoned card summonedThisTurn, reset at the start of the next own turn', () => {
+    const s = scenario({ playerHand: [fieldCard('h1', 500)] });
+    const summoned = summon(s, SIDES.PLAYER, 0).state;
+    expect(summoned.players.player.field.find(Boolean).summonedThisTurn).toBe(true);
+    // player -> bot -> player ; beginActiveTurn resets the player's per-turn flags
+    const botTurn = endTurn(summoned, SIDES.PLAYER).state;
+    const backToPlayer = endTurn(botTurn, SIDES.BOT).state;
+    expect(backToPlayer.players.player.field.find(Boolean).summonedThisTurn).toBe(false);
+  });
+
   test('PROTECTION: only one normal summon per turn', () => {
     const s = scenario({ playerHand: [fieldCard('h1', 500), fieldCard('h2', 400)] });
     const r1 = summon(s, SIDES.PLAYER, 0);

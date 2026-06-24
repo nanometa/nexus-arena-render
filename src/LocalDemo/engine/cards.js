@@ -43,6 +43,27 @@ export const LEGENDARY_SACRIFICES = 2;
 // serves `assets/` (or copies it into `public/`), these same paths will resolve.
 export const ARTWORK_BASE = '/assets/cards/artworks';
 
+// Separate visual layers: the transparent PNG frame and the elemental icon each have their
+// own base path (served in dev by src/setupProxy.js). When a given PNG is missing, GameCard
+// falls back to a CSS frame / an emoji icon — no asset file is required for the demo to work.
+export const FRAME_BASE = '/assets/cards/frames';
+export const ELEMENT_ICON_BASE = '/assets/elements';
+
+// Display metadata for each element: French label + emoji used as the icon fallback.
+export const ELEMENT_META = {
+  [ELEMENTS.ELECTRIC]: { label: 'Électrique', icon: '⚡' },
+  [ELEMENTS.FIRE]: { label: 'Feu', icon: '🔥' },
+  [ELEMENTS.WATER]: { label: 'Eau', icon: '💧' },
+  [ELEMENTS.EARTH]: { label: 'Terre', icon: '⛰️' },
+  [ELEMENTS.NATURE]: { label: 'Nature', icon: '🌿' },
+  [ELEMENTS.SHADOW]: { label: 'Ombre', icon: '🌑' },
+};
+
+export const RARITY_META = {
+  [RARITY.NORMAL]: { label: 'Normale' },
+  [RARITY.LEGENDARY]: { label: 'Légendaire' },
+};
+
 /**
  * The 6 test characters. `power` is the only stat used by combat for now.
  */
