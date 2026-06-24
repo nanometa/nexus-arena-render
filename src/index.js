@@ -2,18 +2,15 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import * as serviceWorker from './serviceWorker';
-import Main from './Components/Main/Main';
-import 'semantic-ui-css/semantic.min.css'
+import App from './App';
 
-
-import { Provider } from 'react-redux';
-import store from './Store/store';
-
+// NOTE: the Redux store and the multiplayer Main are intentionally NOT imported here.
+// They live in src/Components/Main/MultiplayerApp.jsx and are loaded lazily by App.jsx,
+// because importing the store opens the socket.io connection as a side effect. Rendering
+// <App/> keeps the local "vs Bot" demo completely server-free.
 ReactDOM.render(
   <React.StrictMode>
-    <Provider store = {store}>
-      <Main />
-    </Provider> 
+    <App />
   </React.StrictMode>,
   document.getElementById('root')
 );
