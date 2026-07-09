@@ -8,7 +8,7 @@
     radial-gradient(circle at 50% 43%, rgba(111, 64, 255, 0.32), transparent 28%),
     radial-gradient(circle at 50% 36%, rgba(48, 220, 255, 0.2), transparent 42%),
     linear-gradient(180deg, rgba(8, 11, 14, 0.52), rgba(8, 11, 14, 0.96)),
-    url('/assets/backgrounds/battle-arena-1920x1080.png') center / cover fixed,
+    url('./assets/backgrounds/battle-arena-1920x1080.png') center / cover fixed,
     #090d11;
   font-family: Inter, 'Segoe UI', system-ui, sans-serif;
 }
@@ -167,7 +167,7 @@
   background:
     radial-gradient(circle at 50% 30%, rgba(93, 231, 255, 0.18), transparent 30%),
     linear-gradient(180deg, rgba(2, 7, 12, 0.2), rgba(2, 7, 12, 0.82)),
-    url('/assets/backgrounds/layet-vm-page2-environment-v1.png') center / cover no-repeat,
+    url('./assets/backgrounds/layet-vm-page2-environment-v1.png') center / cover no-repeat,
     #02070c;
   font-family: Inter, 'Segoe UI', system-ui, sans-serif;
 }
@@ -700,7 +700,7 @@
   background:
     radial-gradient(circle at 50% 48%, rgba(72, 208, 255, 0.12), transparent 34%),
     linear-gradient(180deg, rgba(3, 7, 11, 0.06), rgba(3, 7, 11, 0.32)),
-    url('/assets/backgrounds/layet-vm-page2-environment-v1.png') center / 100% 100% no-repeat,
+    url('./assets/backgrounds/layet-vm-page2-environment-v1.png') center / 100% 100% no-repeat,
     #05090d;
   box-shadow: none;
   backdrop-filter: none;
@@ -845,7 +845,7 @@
   inset: 0;
   z-index: 20;
   display: block;
-  background: url('/assets/ui/hud/page2-score-hud-wide-native.png') center / contain no-repeat;
+  background: url('./assets/ui/hud/page2-score-hud-wide-native.png') center / contain no-repeat;
   pointer-events: none;
 }
 
@@ -1152,7 +1152,7 @@
   padding: 0;
   background:
     linear-gradient(180deg, rgba(5, 10, 16, 0.08), rgba(5, 10, 16, 0.1)),
-    url('/assets/ui/board/layet-vm-clean-platform.png') center / contain no-repeat;
+    url('./assets/ui/board/layet-vm-clean-platform.png') center / contain no-repeat;
   border: 0;
   border-radius: 20px;
   box-shadow:
