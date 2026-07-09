@@ -1,9 +1,13 @@
 {
-  "name": "yugioh",
+  "name": "layet-vm",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "start": "react-scripts start",
+    "server": "node server/index.js",
+    "deploy:match-registry": "node scripts/deploy-match-registry.cjs",
+    "deploy:genesis-pack": "node scripts/deploy-genesis-pack.cjs",
+    "seed:supabase-cards": "node scripts/seed-supabase-cards.cjs",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -24,9 +28,17 @@
     ]
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
     "@emotion/react": "^11.10.6",
     "@emotion/styled": "^11.10.6",
     "@mui/material": "^5.11.10",
+    "@tsparticles/react": "^4.3.1",
+    "@tsparticles/slim": "^4.3.1",
+    "boardgame.io": "^0.50.2",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.17.0",
+    "framer-motion": "^12.42.2",
+    "howler": "^2.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-redux": "^8.0.5",
@@ -37,5 +49,8 @@
     "semantic-ui-css": "^2.5.0",
     "semantic-ui-react": "^2.1.4",
     "socket.io-client": "^4.6.1"
+  },
+  "devDependencies": {
+    "solc": "^0.8.35"
   }
 }

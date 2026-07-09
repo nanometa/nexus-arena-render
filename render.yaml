@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: nexus-arena-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm run server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGIN
+        fromService:
+          type: web
+          name: nexus-arena-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: LITVM_RPC_URL
+        value: https://liteforge.rpc.caldera.xyz/http
+      - key: LITVM_CHAIN_ID
+        value: "4441"
+      - key: LITVM_WAIT_FOR_CONFIRMATION
+        value: "false"
+      - key: GENESIS_PACK_ADDRESS
+        value: 0xB5CfCee0e8DC85f044b9E56b47fe54505eC2dbc1
+      - key: PACK_CHAIN_STRICT
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  - type: web
+    name: nexus-arena-web
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_GAME_SERVER_URL
+        fromService:
+          type: web
+          name: nexus-arena-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: REACT_APP_GENESIS_PACK_ADDRESS
+        value: 0xB5CfCee0e8DC85f044b9E56b47fe54505eC2dbc1
+      - key: REACT_APP_LITVM_RPC_URL
+        value: https://liteforge.rpc.caldera.xyz/http
+      - key: REACT_APP_LITVM_CHAIN_ID
+        value: "4441"
