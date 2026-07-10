@@ -12,11 +12,13 @@ import {
   mintGenesisPack,
   openGenesisPack,
   readDropState,
+  signWalletLogin,
   shortAddress,
   walletErrorMessage,
 } from './genesisPackClient';
 import {
-  fetchInventory,
+  createPlayerSession,
+  fetchPlayerDashboard,
   fetchPackStatus,
   registerPackMint,
   registerPackOpen,
@@ -29,6 +31,7 @@ const GAME_SERVER_URL = process.env.REACT_APP_GAME_SERVER_URL || 'http://localho
 const MATCHMAKING_SETUP = { mode: 'matchmaking' };
 const LEADERBOARD_STORAGE_KEY = 'nexus-arena-matchmaking-leaderboard-v1';
 const RECORDED_MATCHES_STORAGE_KEY = 'nexus-arena-recorded-match-results-v1';
+const PLAYER_ACCOUNT_STORAGE_KEY = 'nexus-arena-player-account-v1';
 const localMultiplayer = Local();
 const socketMultiplayer = SocketIO({ server: GAME_SERVER_URL });
 
@@ -78,13 +81,14 @@ async function findOpenMatchmakingRoom(lobbyClient) {
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0];
 }
 
-function createSession(matchID, joinResult, playerName, mode) {
+function createSession(matchID, joinResult, playerName, mode, walletAddress) {
   return {
     matchID,
     playerID: joinResult.playerID,
     credentials: joinResult.playerCredentials,
     playerName,
     mode,
+    walletAddress,
   };
 }
 
@@ -118,18 +122,66 @@ function writeLocalLeaderboard(entries) {
   writeStorageArray(LEADERBOARD_STORAGE_KEY, entries || []);
 }
 
+function readStoredPlayerAccount() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = window.localStorage.getItem(PLAYER_ACCOUNT_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : null;
+    return parsed ? { ...parsed, authenticated: false } : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeStoredPlayerAccount(account) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!account) {
+      window.localStorage.removeItem(PLAYER_ACCOUNT_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(
+      PLAYER_ACCOUNT_STORAGE_KEY,
+      JSON.stringify({
+        walletAddress: account.walletAddress,
+        profile: account.profile,
+        stats: account.stats,
+        packs: account.packs,
+        inventory: account.inventory,
+        matches: account.matches,
+        authenticated: false,
+      })
+    );
+  } catch (error) {
+    // A locked-down browser can block localStorage; the wallet session remains live in memory.
+  }
+}
+
+function normalizeDashboard(data) {
+  if (!data) return null;
+  return {
+    walletAddress: data.walletAddress,
+    profile: data.profile || null,
+    stats: data.stats || {},
+    packs: Array.isArray(data.packs) ? data.packs : [],
+    inventory: Array.isArray(data.inventory) ? data.inventory : [],
+    matches: Array.isArray(data.matches) ? data.matches : [],
+    authenticated: Boolean(data.authenticated),
+  };
+}
+
 function packCountLabel(packs) {
   const minted = packs.filter((pack) => pack.status === 'minted').length;
   const opened = packs.filter((pack) => pack.status === 'opened').length;
   return `${minted} ready / ${opened} opened`;
 }
 
-function GenesisPackPanel({ playerName, onInventoryReady }) {
-  const [walletAddress, setWalletAddress] = useState('');
+function GenesisPackPanel({ playerName, playerAccount, onInventoryReady, onPlayerAccountChange }) {
+  const [walletAddress, setWalletAddress] = useState(playerAccount?.walletAddress || '');
   const [packStatus, setPackStatus] = useState(null);
   const [chainDrop, setChainDrop] = useState(null);
-  const [packs, setPacks] = useState([]);
-  const [inventory, setInventory] = useState([]);
+  const [packs, setPacks] = useState(playerAccount?.packs || []);
+  const [inventory, setInventory] = useState(playerAccount?.inventory || []);
   const [openedCards, setOpenedCards] = useState([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -137,12 +189,34 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
   const activePack = packs.find((pack) => pack.status === 'minted');
   const openedPack = packs.find((pack) => pack.status === 'opened');
   const hasInventory = inventory.length > 0;
+  const authenticated = Boolean(playerAccount?.authenticated);
   const drop = chainDrop || packStatus?.drop;
   const contractReady = Boolean(GENESIS_PACK_ADDRESS);
 
   useEffect(() => {
-    onInventoryReady?.(hasInventory);
-  }, [hasInventory, onInventoryReady]);
+    onInventoryReady?.(hasInventory && authenticated);
+  }, [authenticated, hasInventory, onInventoryReady]);
+
+  useEffect(() => {
+    if (!playerAccount?.walletAddress) return;
+    setWalletAddress(playerAccount.walletAddress);
+    setPacks(Array.isArray(playerAccount.packs) ? playerAccount.packs : []);
+    setInventory(Array.isArray(playerAccount.inventory) ? playerAccount.inventory : []);
+  }, [playerAccount]);
+
+  const applyDashboard = (data) => {
+    const dashboard = normalizeDashboard({
+      ...data,
+      authenticated: Boolean(data?.authenticated || playerAccount?.authenticated),
+    });
+    if (!dashboard) return null;
+    setWalletAddress(dashboard.walletAddress || '');
+    setPacks(dashboard.packs);
+    setInventory(dashboard.inventory);
+    onPlayerAccountChange?.(dashboard);
+    writeStoredPlayerAccount(dashboard);
+    return dashboard;
+  };
 
   const loadDrop = async (wallet = walletAddress) => {
     try {
@@ -157,15 +231,19 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
     }
   };
 
-  const loadInventory = async (wallet) => {
+  const loadDashboard = async (wallet) => {
     if (!wallet) return;
-    const data = await fetchInventory(wallet);
-    setPacks(Array.isArray(data.packs) ? data.packs : []);
-    setInventory(Array.isArray(data.inventory) ? data.inventory : []);
+    const data = await fetchPlayerDashboard(wallet);
+    applyDashboard(data);
   };
 
   useEffect(() => {
     loadDrop();
+    if (walletAddress) {
+      loadDashboard(walletAddress).catch((error) => {
+        setMessage(error.message || 'Dashboard unavailable');
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -174,9 +252,17 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
     setMessage('Connecting wallet...');
     try {
       const address = await connectWallet();
-      setWalletAddress(address);
-      await Promise.all([loadInventory(address), loadDrop(address)]);
-      setMessage(`Wallet connected: ${shortAddress(address)}`);
+      setMessage('Sign wallet login to load your Nexus profile...');
+      const signedLogin = await signWalletLogin({ walletAddress: address, displayName: playerName });
+      const dashboard = await createPlayerSession({
+        walletAddress: address,
+        displayName: playerName,
+        message: signedLogin.message,
+        signature: signedLogin.signature,
+      });
+      applyDashboard(dashboard);
+      await loadDrop(address);
+      setMessage(`Profile loaded: ${shortAddress(address)}`);
     } catch (error) {
       setMessage(walletErrorMessage(error));
     } finally {
@@ -207,6 +293,7 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
       });
       setPacks(Array.isArray(data.packs) ? data.packs : []);
       setInventory(Array.isArray(data.inventory) ? data.inventory : []);
+      await loadDashboard(walletAddress);
       await loadDrop(walletAddress);
       setMessage(`Genesis Pack #${minted.tokenId} minted.`);
     } catch (error) {
@@ -240,6 +327,7 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
       setPacks(Array.isArray(data.packs) ? data.packs : []);
       setInventory(Array.isArray(data.inventory) ? data.inventory : []);
       setOpenedCards(Array.isArray(data.cards) ? data.cards : []);
+      await loadDashboard(walletAddress);
       await loadDrop(walletAddress);
       setMessage(`Pack opened: ${data.cards?.length || 20} cards added.`);
     } catch (error) {
@@ -285,12 +373,12 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
         <span className={walletAddress ? 'is-done' : ''}>1 Wallet</span>
         <span className={activePack || openedPack ? 'is-done' : ''}>2 Mint</span>
         <span className={hasInventory ? 'is-done' : ''}>3 Open</span>
-        <span className={hasInventory ? 'is-done' : ''}>4 Play</span>
+        <span className={hasInventory && authenticated ? 'is-done' : ''}>4 Play</span>
       </div>
 
       <div className="genesis-pack__actions">
         <button type="button" onClick={handleConnect} disabled={busy || !hasWalletProvider()}>
-          {walletAddress ? shortAddress(walletAddress) : 'Connect Wallet'}
+          {walletAddress ? (authenticated ? shortAddress(walletAddress) : `Sign ${shortAddress(walletAddress)}`) : 'Connect Wallet'}
         </button>
         <button type="button" onClick={handleMint} disabled={busy || !walletAddress || !contractReady}>
           Mint Pack
@@ -348,6 +436,122 @@ function GenesisPackPanel({ playerName, onInventoryReady }) {
   );
 }
 
+function compactNumber(value) {
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(
+    Number(value || 0)
+  );
+}
+
+function formatMatchDate(value) {
+  if (!value) return 'Recent';
+  try {
+    return new Intl.DateTimeFormat('en', { month: 'short', day: '2-digit' }).format(new Date(value));
+  } catch (error) {
+    return 'Recent';
+  }
+}
+
+function PlayerProfilePanel({ account, canPlay }) {
+  const stats = account?.stats || {};
+  const walletAddress = account?.walletAddress || '';
+  const displayName = account?.profile?.display_name || 'Unsigned pilot';
+  const packs = Array.isArray(account?.packs) ? account.packs : [];
+  const inventory = Array.isArray(account?.inventory) ? account.inventory : [];
+  const openedPacks = packs.filter((pack) => pack.status === 'opened').length;
+  const statusLabel = !walletAddress
+    ? 'Connect wallet to save progress'
+    : !account?.authenticated
+      ? 'Sign wallet to unlock play'
+      : canPlay
+        ? 'Play unlocked'
+        : 'Open Genesis Pack to unlock play';
+
+  return (
+    <section className="nexus-profile-card">
+      <div className="nexus-profile-card__top">
+        <div className="nexus-profile-card__avatar">{displayName.slice(0, 1).toUpperCase()}</div>
+        <div>
+          <p className="layet-multiplayer-lobby__eyebrow">Pilot Profile</p>
+          <h2>{displayName}</h2>
+          <small>{walletAddress ? shortAddress(walletAddress) : 'Connect wallet to save progress'}</small>
+        </div>
+      </div>
+
+      <div className="nexus-profile-card__status" data-ready={canPlay ? 'true' : 'false'}>
+        {statusLabel}
+      </div>
+
+      <div className="nexus-profile-card__stats">
+        <span>
+          <strong>{compactNumber(inventory.length)}</strong>
+          <small>Cards</small>
+        </span>
+        <span>
+          <strong>{compactNumber(openedPacks)}</strong>
+          <small>Packs</small>
+        </span>
+        <span>
+          <strong>{compactNumber(stats.points)}</strong>
+          <small>Points</small>
+        </span>
+        <span>
+          <strong>{stats.wins || 0}W</strong>
+          <small>{stats.losses || 0}L / {stats.draws || 0}D</small>
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function MatchHistoryPanel({ account }) {
+  const walletAddress = account?.walletAddress;
+  const matches = Array.isArray(account?.matches) ? account.matches : [];
+
+  return (
+    <section className="nexus-history-card">
+      <div>
+        <p className="layet-multiplayer-lobby__eyebrow">Wallet History</p>
+        <h2>Recent Matches</h2>
+      </div>
+
+      {walletAddress && matches.length > 0 ? (
+        <ol>
+          {matches.slice(0, 6).map((match) => {
+            const isP0 = match.player0_wallet === walletAddress;
+            const opponent = isP0
+              ? match.player1_name || shortAddress(match.player1_wallet || '')
+              : match.player0_name || shortAddress(match.player0_wallet || '');
+            const result =
+              match.winner_wallet === walletAddress
+                ? 'WIN'
+                : match.winner_wallet
+                  ? 'LOSS'
+                  : 'DRAW';
+            const score = match.score || {};
+            const myScore = isP0 ? score.player0 : score.player1;
+            const opponentScore = isP0 ? score.player1 : score.player0;
+
+            return (
+              <li key={match.match_id}>
+                <span data-result={result.toLowerCase()}>{result}</span>
+                <strong>{opponent || 'Opponent'}</strong>
+                <em>
+                  {myScore?.power ?? 0} / {opponentScore?.power ?? 0}
+                </em>
+                <small>{formatMatchDate(match.completed_at || match.created_at)}</small>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="layet-multiplayer-lobby__empty">
+          {walletAddress ? 'No saved matches yet.' : 'Connect wallet to load match history.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
 async function fetchServerLeaderboard() {
   const response = await fetch(`${GAME_SERVER_URL}/api/leaderboard`);
   if (!response.ok) throw new Error('Leaderboard unavailable');
@@ -365,6 +569,7 @@ async function submitRankedMatchResult(session) {
       matchID: session.matchID,
       playerID: session.playerID,
       credentials: session.credentials,
+      walletAddress: session.walletAddress,
     }),
   });
   const data = await response.json().catch(() => ({}));
@@ -418,16 +623,30 @@ function recordLocalMatchmakingFallback(session, summary) {
   writeStorageArray(LEADERBOARD_STORAGE_KEY, nextLeaderboard);
 }
 
-function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
+function LayetMultiplayerLobby({
+  onExit,
+  onJoinOnline,
+  onWaitForOpponent,
+  playerAccount,
+  onPlayerAccountChange,
+  canPlay,
+  onCanPlayChange,
+}) {
   const lobbyClient = useMemo(() => new LobbyClient({ server: GAME_SERVER_URL }), []);
   const [playerName, setPlayerName] = useState('Player');
   const [roomCode, setRoomCode] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const [canPlay, setCanPlay] = useState(false);
   const [leaderboard, setLeaderboard] = useState(() => readLocalLeaderboard());
 
   const cleanPlayerName = playerName.trim() || 'Player';
+  const walletAddress = playerAccount?.walletAddress || '';
+
+  useEffect(() => {
+    if (playerAccount?.profile?.display_name) {
+      setPlayerName(playerAccount.profile.display_name);
+    }
+  }, [playerAccount?.profile?.display_name]);
 
   useEffect(() => {
     let active = true;
@@ -447,6 +666,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
   }, []);
 
   const startMatchmaking = async () => {
+    if (!playerAccount?.authenticated) {
+      setStatus('Connect and sign your wallet first.');
+      return;
+    }
     if (!canPlay) {
       setStatus('Open your Genesis Pack first to unlock Multiplayer.');
       return;
@@ -462,9 +685,9 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
         try {
           const joinResult = await lobbyClient.joinMatch(GAME_NAME, openMatch.matchID, {
             playerName: cleanPlayerName,
-            data: { mode: MATCHMAKING_SETUP.mode },
+            data: { mode: MATCHMAKING_SETUP.mode, walletAddress },
           });
-          onJoinOnline(createSession(openMatch.matchID, joinResult, cleanPlayerName, 'matchmaking'));
+          onJoinOnline(createSession(openMatch.matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress));
           return;
         } catch (error) {
           if (!isJoinConflict(error)) throw error;
@@ -478,10 +701,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
       const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
         playerID: PLAYER_ID,
         playerName: cleanPlayerName,
-        data: { mode: MATCHMAKING_SETUP.mode },
+        data: { mode: MATCHMAKING_SETUP.mode, walletAddress },
       });
 
-      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'matchmaking'));
+      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -490,6 +713,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
   };
 
   const createRoom = async () => {
+    if (!playerAccount?.authenticated) {
+      setStatus('Connect and sign your wallet first.');
+      return;
+    }
     if (!canPlay) {
       setStatus('Open your Genesis Pack first to unlock Private Rooms.');
       return;
@@ -506,10 +733,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
       const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
         playerID: PLAYER_ID,
         playerName: cleanPlayerName,
-        data: { mode: 'private' },
+        data: { mode: 'private', walletAddress },
       });
 
-      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private'));
+      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -519,6 +746,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
 
   const joinRoom = async (event) => {
     event.preventDefault();
+    if (!playerAccount?.authenticated) {
+      setStatus('Connect and sign your wallet first.');
+      return;
+    }
     if (!canPlay) {
       setStatus('Open your Genesis Pack first to join a room.');
       return;
@@ -535,10 +766,10 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
     try {
       const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
         playerName: cleanPlayerName,
-        data: { mode: 'private' },
+        data: { mode: 'private', walletAddress },
       });
 
-      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private'));
+      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -565,7 +796,12 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
             />
           </label>
 
-          <GenesisPackPanel playerName={cleanPlayerName} onInventoryReady={setCanPlay} />
+          <GenesisPackPanel
+            playerName={cleanPlayerName}
+            playerAccount={playerAccount}
+            onInventoryReady={onCanPlayChange}
+            onPlayerAccountChange={onPlayerAccountChange}
+          />
 
           <div className="layet-multiplayer-lobby__modes" aria-label="Play modes">
             <button
@@ -614,32 +850,38 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
           )}
         </div>
 
-        <aside className="layet-multiplayer-lobby__leaderboard">
-          <div>
-            <p className="layet-multiplayer-lobby__eyebrow">Ranked only</p>
-            <h2>Leaderboard</h2>
-            <small>Only automatic Multiplayer matches are counted.</small>
-          </div>
+        <aside className="layet-multiplayer-lobby__side">
+          <PlayerProfilePanel account={playerAccount} canPlay={canPlay} />
 
-          {leaderboard.length > 0 ? (
-            <ol>
-              {leaderboard.map((entry, index) => (
-                <li key={entry.name}>
-                  <span>{index + 1}</span>
-                  <strong>{entry.name}</strong>
-                  <em>{entry.points} pts</em>
-                  <small>
-                    {entry.wins}W / {entry.losses}L / {entry.draws}D
-                    {entry.lastTxHash ? ' / ON-CHAIN' : ''}
-                  </small>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="layet-multiplayer-lobby__empty">
-              No ranked multiplayer results yet.
-            </p>
-          )}
+          <section className="layet-multiplayer-lobby__leaderboard">
+            <div>
+              <p className="layet-multiplayer-lobby__eyebrow">Ranked only</p>
+              <h2>Leaderboard</h2>
+              <small>Only automatic Multiplayer matches are counted.</small>
+            </div>
+
+            {leaderboard.length > 0 ? (
+              <ol>
+                {leaderboard.map((entry, index) => (
+                  <li key={entry.walletAddress || entry.name}>
+                    <span>{index + 1}</span>
+                    <strong>{entry.name}</strong>
+                    <em>{entry.points} pts</em>
+                    <small>
+                      {entry.wins}W / {entry.losses}L / {entry.draws}D
+                      {entry.lastTxHash ? ' / ON-CHAIN' : ''}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="layet-multiplayer-lobby__empty">
+                No ranked multiplayer results yet.
+              </p>
+            )}
+          </section>
+
+          <MatchHistoryPanel account={playerAccount} />
         </aside>
       </section>
     </main>
@@ -766,6 +1008,18 @@ function LocalPreviewMatch({ onBackToLobby }) {
 export default function LayetMultiplayer({ onExit }) {
   const [session, setSession] = useState(null);
   const [mode, setMode] = useState('lobby');
+  const [playerAccount, setPlayerAccountState] = useState(() => readStoredPlayerAccount());
+  const [canPlay, setCanPlay] = useState(() => {
+    const storedAccount = readStoredPlayerAccount();
+    return Boolean(storedAccount?.authenticated && storedAccount?.inventory?.length);
+  });
+
+  const updatePlayerAccount = (account) => {
+    const dashboard = normalizeDashboard(account);
+    setPlayerAccountState(dashboard);
+    writeStoredPlayerAccount(dashboard);
+    setCanPlay(Boolean(dashboard?.authenticated && dashboard?.inventory?.length));
+  };
 
   if (mode === 'local') {
     return <LocalPreviewMatch onBackToLobby={() => setMode('lobby')} />;
@@ -790,9 +1044,13 @@ export default function LayetMultiplayer({ onExit }) {
   if (mode === 'online' && session) {
     const handleMatchEnd = (summary) => {
       if (session.mode !== MATCHMAKING_SETUP.mode) return;
-      submitRankedMatchResult(session).catch(() => {
-        recordLocalMatchmakingFallback(session, summary);
-      });
+      submitRankedMatchResult(session)
+        .then((data) => {
+          if (data.dashboard) updatePlayerAccount(data.dashboard);
+        })
+        .catch(() => {
+          recordLocalMatchmakingFallback(session, summary);
+        });
       window.setTimeout(() => {
         setSession(null);
         setMode('lobby');
@@ -828,6 +1086,10 @@ export default function LayetMultiplayer({ onExit }) {
   return (
     <LayetMultiplayerLobby
       onExit={onExit}
+      playerAccount={playerAccount}
+      canPlay={canPlay}
+      onCanPlayChange={setCanPlay}
+      onPlayerAccountChange={updatePlayerAccount}
       onJoinOnline={(nextSession) => {
         setSession(nextSession);
         setMode('online');

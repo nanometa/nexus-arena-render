@@ -36,6 +36,28 @@ export function walletErrorMessage(error) {
   return message.replace('execution reverted: ', '');
 }
 
+function randomNonce() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function createWalletLoginMessage({ walletAddress, displayName }) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'nexus-arena';
+  return [
+    'Nexus Arena Login',
+    '',
+    `Wallet: ${walletAddress}`,
+    `Name: ${displayName || 'Player'}`,
+    `Origin: ${origin}`,
+    `Nonce: ${randomNonce()}`,
+    `Issued At: ${new Date().toISOString()}`,
+    '',
+    'Sign this message to save and load your Nexus Arena profile.',
+  ].join('\n');
+}
+
 async function switchToLitVM() {
   if (!hasWalletProvider()) return;
   try {
@@ -73,6 +95,25 @@ export async function connectWallet() {
   const provider = new ethers.BrowserProvider(window.ethereum);
   const accounts = await provider.send('eth_requestAccounts', []);
   return ethers.getAddress(accounts[0]);
+}
+
+export async function signWalletLogin({ walletAddress, displayName }) {
+  if (!hasWalletProvider()) {
+    throw new Error('Install MetaMask or another EVM wallet');
+  }
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const signerAddress = ethers.getAddress(await signer.getAddress());
+  const address = ethers.getAddress(walletAddress);
+
+  if (signerAddress !== address) {
+    throw new Error('Connected wallet changed. Connect again.');
+  }
+
+  const message = createWalletLoginMessage({ walletAddress: address, displayName });
+  const signature = await signer.signMessage(message);
+  return { message, signature };
 }
 
 async function getPackContract() {

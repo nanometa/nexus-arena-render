@@ -9,6 +9,7 @@ const { getGenesisPackStatus } = require('./onchain/genesisPack');
 const { getSupabaseStatus } = require('./supabase/client');
 const { createRankedResultsApi } = require('./ranked-results');
 const { createPacksApi } = require('./packs-api');
+const { createPlayerApi } = require('./player-api');
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), quiet: true });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env'), quiet: true });
@@ -34,6 +35,7 @@ server.app.use(
 );
 
 server.app.use(createPacksApi({ allowedOrigins }));
+server.app.use(createPlayerApi({ allowedOrigins }));
 
 server.app.use(async (ctx, next) => {
   if (ctx.path === '/health') {

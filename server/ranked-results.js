@@ -1,4 +1,8 @@
 const { getMatchRegistryStatus, hashMatchPayload, hashText, recordMatchOnChain } = require('./onchain/matchRegistry');
+const { normalizeAddress } = require('./onchain/genesisPack');
+const { getSupabaseStatus, supabaseRest } = require('./supabase/client');
+const { ensurePlayer } = require('./packs-api');
+const { buildPlayerDashboard } = require('./player-api');
 
 const MATCHMAKING_MODE = 'matchmaking';
 const MAX_BODY_BYTES = 64 * 1024;
@@ -68,10 +72,22 @@ function getScore(G, playerID) {
   };
 }
 
-function buildResultPayload({ matchID, state, metadata, log }) {
+function walletFromPlayer(player, fallbackWalletAddress) {
+  return normalizeAddress(player?.data?.walletAddress || fallbackWalletAddress || '');
+}
+
+function buildResultPayload({ matchID, state, metadata, log, submitterPlayerID, submitterWalletAddress }) {
   const G = state?.G;
   const player0 = getPlayer(metadata, '0') || {};
   const player1 = getPlayer(metadata, '1') || {};
+  const player0Wallet = walletFromPlayer(
+    player0,
+    submitterPlayerID === '0' ? submitterWalletAddress : ''
+  );
+  const player1Wallet = walletFromPlayer(
+    player1,
+    submitterPlayerID === '1' ? submitterWalletAddress : ''
+  );
   const player0Score = getScore(G, '0');
   const player1Score = getScore(G, '1');
   const playedAt = Math.floor(Date.now() / 1000);
@@ -98,14 +114,20 @@ function buildResultPayload({ matchID, state, metadata, log }) {
     matchID,
     mode: MATCHMAKING_MODE,
     players: {
-      0: { hash: player0Hash, name: player0.name || 'Player 1' },
-      1: { hash: player1Hash, name: player1.name || 'Player 2' },
+      0: { hash: player0Hash, name: player0.name || 'Player 1', walletAddress: player0Wallet },
+      1: { hash: player1Hash, name: player1.name || 'Player 2', walletAddress: player1Wallet },
     },
     score: {
       player0: player0Score,
       player1: player1Score,
     },
     winner,
+    winnerWallet:
+      winner === 'draw'
+        ? null
+        : winner === '0'
+          ? player0Wallet || null
+          : player1Wallet || null,
     winnerHash,
     movesHash,
     playedAt,
@@ -116,6 +138,153 @@ function buildResultPayload({ matchID, state, metadata, log }) {
     matchIDHash: hashText(`nexus-arena:${matchID}`),
     matchHash: hashMatchPayload(proofPayload),
   };
+}
+
+function serializeSupabaseEntry(entry) {
+  return {
+    id: entry.wallet_address,
+    walletAddress: entry.wallet_address,
+    name: entry.display_name || 'Player',
+    games: Number(entry.games || 0),
+    wins: Number(entry.wins || 0),
+    losses: Number(entry.losses || 0),
+    draws: Number(entry.draws || 0),
+    points: Number(entry.points || 0),
+    powerFor: Number(entry.power_for || 0),
+    powerAgainst: Number(entry.power_against || 0),
+    lastPlayedAt: entry.updated_at ? Math.floor(new Date(entry.updated_at).getTime() / 1000) : 0,
+  };
+}
+
+async function fetchPersistentLeaderboard() {
+  if (!getSupabaseStatus().enabled) return null;
+  try {
+    const rows = await supabaseRest(
+      'leaderboard_entries?select=*&order=points.desc,wins.desc,power_for.desc,updated_at.desc&limit=25'
+    );
+    return rows.map(serializeSupabaseEntry);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function upsertPersistentLeaderboardEntry({ playerID, player, score, opponentScore, winner, playedAt }) {
+  if (!player.walletAddress) return;
+
+  await ensurePlayer(player.walletAddress, player.name);
+  const existingRows = await supabaseRest(
+    `leaderboard_entries?wallet_address=eq.${player.walletAddress}&select=*&limit=1`
+  ).catch(() => []);
+  const existing = existingRows[0] || {};
+  const isDraw = winner === 'draw';
+  const won = winner === playerID;
+  const next = {
+    wallet_address: player.walletAddress,
+    display_name: player.name,
+    games: Number(existing.games || 0) + 1,
+    wins: Number(existing.wins || 0) + (won ? 1 : 0),
+    losses: Number(existing.losses || 0) + (!won && !isDraw ? 1 : 0),
+    draws: Number(existing.draws || 0) + (isDraw ? 1 : 0),
+    power_for: Number(existing.power_for || 0) + Number(score.power || 0),
+    power_against: Number(existing.power_against || 0) + Number(opponentScore.power || 0),
+    updated_at: new Date(playedAt * 1000).toISOString(),
+  };
+  next.points = next.wins * 3 + next.draws;
+
+  await supabaseRest('leaderboard_entries?on_conflict=wallet_address', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: [next],
+  });
+}
+
+async function persistMatchRecord(result, log) {
+  if (!getSupabaseStatus().enabled) return;
+
+  const player0 = result.players['0'];
+  const player1 = result.players['1'];
+  await Promise.all([
+    player0.walletAddress ? ensurePlayer(player0.walletAddress, player0.name) : Promise.resolve(),
+    player1.walletAddress ? ensurePlayer(player1.walletAddress, player1.name) : Promise.resolve(),
+  ]);
+
+  const fullMatchRow = {
+    match_id: result.matchID,
+    player0_wallet: player0.walletAddress || null,
+    player1_wallet: player1.walletAddress || null,
+    player0_name: player0.name,
+    player1_name: player1.name,
+    winner_wallet: result.winnerWallet,
+    winner_player_id: result.winner,
+    score: result.score,
+    mode: result.mode,
+    onchain_tx_hash: result.onchain?.txHash || null,
+    completed_at: new Date(result.playedAt * 1000).toISOString(),
+    created_at: new Date(result.playedAt * 1000).toISOString(),
+  };
+  const legacyMatchRow = {
+    match_id: result.matchID,
+    player0_wallet: player0.walletAddress || null,
+    player1_wallet: player1.walletAddress || null,
+    winner_wallet: result.winnerWallet,
+    score: result.score,
+    mode: result.mode,
+    created_at: new Date(result.playedAt * 1000).toISOString(),
+  };
+
+  await supabaseRest('matches?on_conflict=match_id', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: [fullMatchRow],
+  }).catch(() =>
+    supabaseRest('matches?on_conflict=match_id', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: [legacyMatchRow],
+    })
+  );
+
+  const events = (log || []).slice(0, 220).map((entry, index) => {
+    const eventPlayerID = String(entry.playerID ?? '');
+    const eventPlayer = result.players[eventPlayerID] || {};
+    return {
+      match_id: result.matchID,
+      event_index: index,
+      turn: Number(entry.turn || 0),
+      phase: String(entry.phase || ''),
+      player_id: eventPlayerID || null,
+      player_wallet: eventPlayer.walletAddress || null,
+      action: String(entry.action || 'move'),
+      payload: entry,
+    };
+  });
+
+  if (events.length > 0) {
+    await supabaseRest('match_events', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: events,
+    }).catch(() => null);
+  }
+
+  await Promise.all([
+    upsertPersistentLeaderboardEntry({
+      playerID: '0',
+      player: player0,
+      score: result.score.player0,
+      opponentScore: result.score.player1,
+      winner: result.winner,
+      playedAt: result.playedAt,
+    }),
+    upsertPersistentLeaderboardEntry({
+      playerID: '1',
+      player: player1,
+      score: result.score.player1,
+      opponentScore: result.score.player0,
+      winner: result.winner,
+      playedAt: result.playedAt,
+    }),
+  ]);
 }
 
 function updateLeaderboard(leaderboard, result) {
@@ -183,8 +352,9 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
     }
 
     if (ctx.path === '/api/leaderboard' && ctx.method === 'GET') {
+      const persistentLeaderboard = await fetchPersistentLeaderboard();
       ctx.body = {
-        leaderboard: serializeLeaderboard(leaderboard),
+        leaderboard: persistentLeaderboard || serializeLeaderboard(leaderboard),
         onchain: getMatchRegistryStatus(),
       };
       return;
@@ -201,6 +371,7 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
         const matchID = String(body.matchID || '').trim();
         const playerID = String(body.playerID ?? '');
         const credentials = body.credentials;
+        const submitterWalletAddress = normalizeAddress(body.walletAddress || '');
 
         if (!matchID) {
           ctx.status = 400;
@@ -258,14 +429,26 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
         }
 
         if (recordedResults.has(matchID)) {
+          const persistentLeaderboard = await fetchPersistentLeaderboard();
+          const dashboard = submitterWalletAddress
+            ? await buildPlayerDashboard(submitterWalletAddress).catch(() => null)
+            : null;
           ctx.body = {
             result: recordedResults.get(matchID),
-            leaderboard: serializeLeaderboard(leaderboard),
+            dashboard,
+            leaderboard: persistentLeaderboard || serializeLeaderboard(leaderboard),
           };
           return;
         }
 
-        const result = buildResultPayload({ matchID, state, metadata, log });
+        const result = buildResultPayload({
+          matchID,
+          state,
+          metadata,
+          log,
+          submitterPlayerID: playerID,
+          submitterWalletAddress,
+        });
 
         try {
           result.onchain = await recordMatchOnChain(result);
@@ -278,10 +461,22 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
 
         recordedResults.set(matchID, result);
         updateLeaderboard(leaderboard, result);
+        await persistMatchRecord(result, log).catch((error) => {
+          result.persistence = {
+            status: 'failed',
+            reason: error.message || 'Supabase persistence failed',
+          };
+        });
+
+        const persistentLeaderboard = await fetchPersistentLeaderboard();
+        const dashboard = submitterWalletAddress
+          ? await buildPlayerDashboard(submitterWalletAddress).catch(() => null)
+          : null;
 
         ctx.body = {
           result,
-          leaderboard: serializeLeaderboard(leaderboard),
+          dashboard,
+          leaderboard: persistentLeaderboard || serializeLeaderboard(leaderboard),
         };
         return;
       } catch (error) {

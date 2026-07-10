@@ -468,5 +468,8 @@ function createPacksApi({ allowedOrigins }) {
 
 module.exports = {
   createPacksApi,
+  ensurePlayer,
   generateBalancedPack,
+  getInventory,
+  getPacks,
 };

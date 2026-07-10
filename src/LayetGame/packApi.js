@@ -19,6 +19,23 @@ export async function fetchInventory(walletAddress) {
   return readResponse(response);
 }
 
+export async function createPlayerSession({ walletAddress, displayName, message, signature }) {
+  const response = await fetch(`${GAME_SERVER_URL}/api/player/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ walletAddress, displayName, message, signature }),
+  });
+  return readResponse(response);
+}
+
+export async function fetchPlayerDashboard(walletAddress) {
+  const params = new URLSearchParams({ walletAddress });
+  const response = await fetch(`${GAME_SERVER_URL}/api/player/dashboard?${params.toString()}`);
+  return readResponse(response);
+}
+
 export async function registerPackMint({ walletAddress, tokenId, txHash, displayName }) {
   const response = await fetch(`${GAME_SERVER_URL}/api/packs/register-mint`, {
     method: 'POST',

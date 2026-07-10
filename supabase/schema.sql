@@ -3,9 +3,14 @@ create extension if not exists pgcrypto;
 create table if not exists public.players (
   wallet_address text primary key,
   display_name text,
+  avatar_url text,
+  last_seen_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.players add column if not exists avatar_url text;
+alter table public.players add column if not exists last_seen_at timestamptz;
 
 create table if not exists public.cards (
   id text primary key,
@@ -63,11 +68,40 @@ create table if not exists public.matches (
   match_id text not null unique,
   player0_wallet text,
   player1_wallet text,
+  player0_name text,
+  player1_name text,
   winner_wallet text,
+  winner_player_id text,
   score jsonb not null default '{}'::jsonb,
   mode text not null default 'matchmaking',
+  onchain_tx_hash text,
+  completed_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.matches add column if not exists player0_name text;
+alter table public.matches add column if not exists player1_name text;
+alter table public.matches add column if not exists winner_player_id text;
+alter table public.matches add column if not exists onchain_tx_hash text;
+alter table public.matches add column if not exists completed_at timestamptz;
+
+create table if not exists public.match_events (
+  id uuid primary key default gen_random_uuid(),
+  match_id text not null references public.matches(match_id) on delete cascade,
+  event_index integer not null,
+  turn integer,
+  phase text,
+  player_id text,
+  player_wallet text,
+  action text not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique(match_id, event_index)
+);
+
+create index if not exists matches_player0_wallet_idx on public.matches(player0_wallet);
+create index if not exists matches_player1_wallet_idx on public.matches(player1_wallet);
+create index if not exists match_events_match_idx on public.match_events(match_id, event_index);
 
 create table if not exists public.leaderboard_entries (
   wallet_address text primary key references public.players(wallet_address) on delete cascade,
@@ -88,6 +122,7 @@ alter table public.player_packs enable row level security;
 alter table public.pack_openings enable row level security;
 alter table public.player_cards enable row level security;
 alter table public.matches enable row level security;
+alter table public.match_events enable row level security;
 alter table public.leaderboard_entries enable row level security;
 
 drop policy if exists "Cards are public read" on public.cards;
@@ -98,4 +133,14 @@ create policy "Cards are public read"
 drop policy if exists "Leaderboard is public read" on public.leaderboard_entries;
 create policy "Leaderboard is public read"
   on public.leaderboard_entries for select
+  using (true);
+
+drop policy if exists "Matches are public read" on public.matches;
+create policy "Matches are public read"
+  on public.matches for select
+  using (true);
+
+drop policy if exists "Match events are public read" on public.match_events;
+create policy "Match events are public read"
+  on public.match_events for select
   using (true);
