@@ -5,7 +5,7 @@ import './App.css';
 const GAME_TITLE = 'NEXUS ARENA';
 
 export default function App() {
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState('multiplayer-page2');
 
   if (mode === 'multiplayer-page2') {
     return <LayetMultiplayer onExit={() => setMode(null)} />;

@@ -21,6 +21,7 @@ import {
   registerPackMint,
   registerPackOpen,
 } from './packApi';
+import genesisPackArt from './assets/packs/nexus-genesis-pack.png';
 
 const GAME_NAME = LayetDuelMultiplayer.name;
 const GAME_TITLE = 'NEXUS ARENA';
@@ -123,7 +124,7 @@ function packCountLabel(packs) {
   return `${minted} ready / ${opened} opened`;
 }
 
-function GenesisPackPanel({ playerName }) {
+function GenesisPackPanel({ playerName, onInventoryReady }) {
   const [walletAddress, setWalletAddress] = useState('');
   const [packStatus, setPackStatus] = useState(null);
   const [chainDrop, setChainDrop] = useState(null);
@@ -134,8 +135,14 @@ function GenesisPackPanel({ playerName }) {
   const [busy, setBusy] = useState(false);
 
   const activePack = packs.find((pack) => pack.status === 'minted');
+  const openedPack = packs.find((pack) => pack.status === 'opened');
+  const hasInventory = inventory.length > 0;
   const drop = chainDrop || packStatus?.drop;
   const contractReady = Boolean(GENESIS_PACK_ADDRESS);
+
+  useEffect(() => {
+    onInventoryReady?.(hasInventory);
+  }, [hasInventory, onInventoryReady]);
 
   const loadDrop = async (wallet = walletAddress) => {
     try {
@@ -244,12 +251,19 @@ function GenesisPackPanel({ playerName }) {
 
   return (
     <section className="genesis-pack">
-      <div className="genesis-pack__copy">
-        <p className="layet-multiplayer-lobby__eyebrow">Genesis Drop</p>
-        <h2>Mint your play pack</h2>
-        <p>
-          Free testnet pack. 1 pack per wallet. 20 balanced cards for your inventory.
-        </p>
+      <div className="genesis-pack__stage">
+        <div className="genesis-pack__art-wrap" data-ready={hasInventory ? 'true' : 'false'}>
+          <img className="genesis-pack__art" src={genesisPackArt} alt="Nexus Arena Genesis Pack" />
+          <span className="genesis-pack__shine" />
+        </div>
+
+        <div className="genesis-pack__copy">
+          <p className="layet-multiplayer-lobby__eyebrow">Genesis Drop</p>
+          <h2>Claim your first deck</h2>
+          <p>
+            Mint 1 free testnet booster, open it, then play with the 20 cards added to your inventory.
+          </p>
+        </div>
       </div>
 
       <div className="genesis-pack__stats">
@@ -265,6 +279,13 @@ function GenesisPackPanel({ playerName }) {
           <strong>{inventory.length}</strong>
           <small>cards owned</small>
         </span>
+      </div>
+
+      <div className="genesis-pack__progress" aria-label="Pack onboarding progress">
+        <span className={walletAddress ? 'is-done' : ''}>1 Wallet</span>
+        <span className={activePack || openedPack ? 'is-done' : ''}>2 Mint</span>
+        <span className={hasInventory ? 'is-done' : ''}>3 Open</span>
+        <span className={hasInventory ? 'is-done' : ''}>4 Play</span>
       </div>
 
       <div className="genesis-pack__actions">
@@ -287,13 +308,38 @@ function GenesisPackPanel({ playerName }) {
 
       {message && <p className="genesis-pack__message">{message}</p>}
 
+      <div className="genesis-pack__inventory">
+        <div className="genesis-pack__inventory-head">
+          <strong>Inventory</strong>
+          <span>{inventory.length || 0} / 20 cards</span>
+        </div>
+
+        {inventory.length > 0 ? (
+          <div className="genesis-pack__cards" aria-label="Owned inventory cards">
+            {inventory.map((card) => (
+              <article key={`${card.id}-${card.copyNumber || card.copy_number || card.name}`}>
+                <img src={card.image} alt={card.name} />
+                <div>
+                  <strong>{card.score}</strong>
+                  <span>{card.rarity}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="genesis-pack__empty-inventory">
+            Open the Genesis Pack to reveal your first playable cards.
+          </div>
+        )}
+      </div>
+
       {openedCards.length > 0 && (
-        <div className="genesis-pack__cards" aria-label="Opened pack cards">
-          {openedCards.slice(0, 8).map((card) => (
-            <article key={`${card.id}-${card.copyNumber}`}>
+        <div className="genesis-pack__reveal" aria-label="Latest opened pack cards">
+          <span>Latest reveal</span>
+          {openedCards.slice(0, 5).map((card) => (
+            <article key={`reveal-${card.id}-${card.copyNumber}`}>
               <img src={card.image} alt={card.name} />
               <strong>{card.score}</strong>
-              <span>{card.rarity}</span>
             </article>
           ))}
         </div>
@@ -378,6 +424,7 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
   const [roomCode, setRoomCode] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const [canPlay, setCanPlay] = useState(false);
   const [leaderboard, setLeaderboard] = useState(() => readLocalLeaderboard());
 
   const cleanPlayerName = playerName.trim() || 'Player';
@@ -400,6 +447,11 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
   }, []);
 
   const startMatchmaking = async () => {
+    if (!canPlay) {
+      setStatus('Open your Genesis Pack first to unlock Multiplayer.');
+      return;
+    }
+
     setBusy(true);
     setStatus('Searching opponent...');
     try {
@@ -438,6 +490,11 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
   };
 
   const createRoom = async () => {
+    if (!canPlay) {
+      setStatus('Open your Genesis Pack first to unlock Private Rooms.');
+      return;
+    }
+
     setBusy(true);
     setStatus('Creating private room...');
     try {
@@ -462,6 +519,11 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
 
   const joinRoom = async (event) => {
     event.preventDefault();
+    if (!canPlay) {
+      setStatus('Open your Genesis Pack first to join a room.');
+      return;
+    }
+
     const matchID = normalizeRoomCode(roomCode);
     if (!matchID) {
       setStatus('Room code required');
@@ -503,29 +565,29 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
             />
           </label>
 
-          <GenesisPackPanel playerName={cleanPlayerName} />
+          <GenesisPackPanel playerName={cleanPlayerName} onInventoryReady={setCanPlay} />
 
           <div className="layet-multiplayer-lobby__modes" aria-label="Play modes">
             <button
               type="button"
               className="layet-multiplayer-lobby__mode-card layet-multiplayer-lobby__mode-card--ranked"
               onClick={startMatchmaking}
-              disabled={busy}
+              disabled={busy || !canPlay}
             >
               <span>Play Mode</span>
               <strong>Multiplayer</strong>
-              <small>Auto matchmaking. Counts for leaderboard.</small>
+              <small>{canPlay ? 'Auto matchmaking. Counts for leaderboard.' : 'Open pack to unlock.'}</small>
             </button>
 
             <button
               type="button"
               className="layet-multiplayer-lobby__mode-card"
               onClick={createRoom}
-              disabled={busy}
+              disabled={busy || !canPlay}
             >
               <span>Private</span>
               <strong>Create Room</strong>
-              <small>Room code match. No leaderboard points.</small>
+              <small>{canPlay ? 'Room code match. No leaderboard points.' : 'Requires unlocked inventory.'}</small>
             </button>
           </div>
 
@@ -538,7 +600,7 @@ function LayetMultiplayerLobby({ onExit, onJoinOnline, onWaitForOpponent }) {
                 placeholder="matchID"
               />
             </label>
-            <button type="submit" disabled={busy}>
+            <button type="submit" disabled={busy || !canPlay}>
               Join Room
             </button>
           </form>

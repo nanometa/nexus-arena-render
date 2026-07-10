@@ -29,11 +29,6 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
-    "@emotion/react": "^11.10.6",
-    "@emotion/styled": "^11.10.6",
-    "@mui/material": "^5.11.10",
-    "@tsparticles/react": "^4.3.1",
-    "@tsparticles/slim": "^4.3.1",
     "boardgame.io": "^0.50.2",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
@@ -41,14 +36,7 @@
     "howler": "^2.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-redux": "^8.0.5",
-    "react-scripts": "^5.0.1",
-    "react-sky": "^1.1.0",
-    "react-transition-group": "^4.4.5",
-    "redux": "^4.2.1",
-    "semantic-ui-css": "^2.5.0",
-    "semantic-ui-react": "^2.1.4",
-    "socket.io-client": "^4.6.1"
+    "react-scripts": "^5.0.1"
   },
   "devDependencies": {
     "solc": "^0.8.35"
