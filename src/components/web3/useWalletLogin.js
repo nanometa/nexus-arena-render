@@ -3,6 +3,7 @@ import { useAccount, useConnect, useSignMessage, useSwitchChain } from 'wagmi';
 import {
   LITVM_CHAIN_ID,
   createWalletLoginMessage,
+  defaultPilotName,
   hasWalletProvider,
   walletErrorMessage,
 } from '../../LayetGame/genesisPackClient';
@@ -23,7 +24,7 @@ export function useWalletLogin() {
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const pushToast = useToastStore((state) => state.pushToast);
 
-  const connectAndSign = async (displayName = 'Pilot') => {
+  const connectAndSign = async (displayName = '') => {
     try {
       if (!hasWalletProvider()) {
         throw new Error('Install MetaMask or another EVM wallet.');
@@ -45,11 +46,19 @@ export function useWalletLogin() {
         throw new Error('Wallet address unavailable.');
       }
 
-      const message = createWalletLoginMessage({ walletAddress, displayName });
+      const requestedName = String(displayName || '').trim();
+      const resolvedDisplayName =
+        requestedName && requestedName.toLowerCase() !== 'pilot'
+          ? requestedName
+          : defaultPilotName(walletAddress);
+      const message = createWalletLoginMessage({
+        walletAddress,
+        displayName: resolvedDisplayName,
+      });
       const signature = await signMessageAsync({ message, account: walletAddress });
       const dashboard = await createPlayerSession({
         walletAddress,
-        displayName,
+        displayName: resolvedDisplayName,
         message,
         signature,
       });

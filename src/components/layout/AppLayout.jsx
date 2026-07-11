@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAccount } from 'wagmi';
 import ToastViewport from '../feedback/ToastViewport';
 import WalletLanding from '../web3/WalletLanding';
 import nexusArenaWordmark from '../../assets/branding/nexus-arena-wordmark.svg';
@@ -25,11 +26,21 @@ const routeBackgrounds = {
 
 export default function AppLayout() {
   const location = useLocation();
+  const { address, isConnected } = useAccount();
   const playerAccount = useNexusStore((state) => state.playerAccount);
   const clearPlayerAccount = useNexusStore((state) => state.clearPlayerAccount);
   const inventoryCount = playerAccount?.inventory?.length || 0;
   const isAuthenticated = Boolean(playerAccount?.authenticated);
   const routeBackground = routeBackgrounds[location.pathname] || routeBackgrounds['/'];
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const activeWallet = String(address || '').toLowerCase();
+    const sessionWallet = String(playerAccount?.walletAddress || '').toLowerCase();
+    if (!isConnected || !activeWallet || activeWallet !== sessionWallet) {
+      clearPlayerAccount();
+    }
+  }, [address, clearPlayerAccount, isAuthenticated, isConnected, playerAccount?.walletAddress]);
 
   if (!isAuthenticated) {
     return (

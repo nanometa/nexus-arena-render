@@ -27,6 +27,11 @@ export function shortAddress(address) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+export function defaultPilotName(address) {
+  const suffix = String(address || '').replace(/^0x/i, '').slice(-4).toUpperCase();
+  return suffix ? `Pilot ${suffix}` : 'Pilot';
+}
+
 export function walletErrorMessage(error) {
   const message = error?.shortMessage || error?.reason || error?.message || 'Wallet error';
   if (message.includes('user rejected') || message.includes('User denied')) {

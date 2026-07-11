@@ -5,6 +5,7 @@ import nexusArenaWordmark from '../assets/branding/nexus-arena-wordmark.svg';
 import nexusSigil from '../assets/branding/nexus-ui-sigil.svg';
 import dashboardFrame from '../assets/branding/nexus-dashboard-frame.png';
 import genesisPackArt from '../LayetGame/assets/packs/nexus-genesis-pack.png';
+import { defaultPilotName } from '../LayetGame/genesisPackClient';
 import { useNexusStore } from '../store/useNexusStore';
 
 const CARD_BACK = '/assets/cards/backs/card-back-standard.png';
@@ -135,7 +136,7 @@ function WalletSummary({ account, inventoryCount }) {
       <p className="nexus-kicker">Pilot Status</p>
       <div className="mt-2 flex items-end justify-between gap-4">
         <h2 className="truncate text-2xl font-black text-white">
-          {account?.profile?.display_name || 'Connected Pilot'}
+          {account?.profile?.display_name || defaultPilotName(wallet)}
         </h2>
         <span className="mb-1 h-2 w-2 shrink-0 rounded-full bg-gold shadow-[0_0_16px_rgba(245,211,138,0.8)]" />
       </div>

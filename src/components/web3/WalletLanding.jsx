@@ -15,7 +15,7 @@ export default function WalletLanding() {
   const handleConnect = async () => {
     setBusy(true);
     try {
-      await connectAndSign('Pilot');
+      await connectAndSign();
     } finally {
       setBusy(false);
     }

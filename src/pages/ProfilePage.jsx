@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import profileFrame from '../assets/branding/nexus-profile-frame.png';
 import { fetchPlayerDashboard } from '../LayetGame/packApi';
+import { defaultPilotName } from '../LayetGame/genesisPackClient';
 import { useNexusStore } from '../store/useNexusStore';
 import { useToastStore } from '../store/useToastStore';
 
@@ -49,7 +50,7 @@ export default function ProfilePage() {
 function ProfileHero({ account }) {
   const stats = account?.stats || {};
   const inventory = account?.inventory || [];
-  const name = account?.profile?.display_name || 'Pilot';
+  const name = account?.profile?.display_name || defaultPilotName(account?.walletAddress);
 
   return (
     <motion.header
@@ -129,7 +130,7 @@ function Leaderboard({ entries }) {
               <span className="font-mono text-sm text-gold">#{String(index + 1).padStart(2, '0')}</span>
               <div className="min-w-0">
                 <strong className="block truncate text-sm uppercase tracking-wide text-white">
-                  {entry.name || entry.displayName || 'Pilot'}
+                  {entry.name || entry.displayName || defaultPilotName(entry.walletAddress)}
                 </strong>
                 <span className="text-[11px] text-slate-500">
                   {entry.wins || 0}W · {entry.losses || 0}L · {entry.draws || 0}D
