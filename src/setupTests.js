@@ -12,3 +12,40 @@ try {
 } catch (e) {
   // jest-dom is optional; ignore if it is not installed.
 }
+
+jest.mock('wagmi', () => {
+  const React = require('react');
+  return {
+    WagmiProvider: ({ children }) => React.createElement(React.Fragment, null, children),
+    createConfig: () => ({}),
+    http: () => ({}),
+    useAccount: () => ({ address: undefined, chainId: undefined, isConnected: false }),
+    useConnect: () => ({
+      connectors: [],
+      connectAsync: () => Promise.resolve({ accounts: [] }),
+      isPending: false,
+    }),
+    useDisconnect: () => ({ disconnect: () => {} }),
+    useSignMessage: () => ({ signMessageAsync: () => Promise.resolve('0x') }),
+    useSwitchChain: () => ({ switchChainAsync: () => Promise.resolve() }),
+    useWriteContract: () => ({ writeContractAsync: () => Promise.resolve('0x') }),
+  };
+});
+
+jest.mock(
+  '@wagmi/connectors/injected',
+  () => ({
+    injected: () => ({}),
+  }),
+  { virtual: true }
+);
+
+jest.mock('viem', () => ({
+  createPublicClient: () => ({
+    readContract: () => Promise.resolve(0),
+    waitForTransactionReceipt: () => Promise.resolve({ logs: [] }),
+  }),
+  http: () => ({}),
+  isAddress: (value) => Boolean(value),
+  parseEventLogs: () => [],
+}));

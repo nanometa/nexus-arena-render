@@ -1,0 +1,12 @@
+<svg width="246" height="30" viewBox="0 0 246 30" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Connecting">
+  <defs>
+    <linearGradient id="labelGold" x1="0" y1="0" x2="246" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff7d6"/>
+      <stop offset="0.5" stop-color="#e3b861"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <text x="123" y="22" text-anchor="middle" fill="url(#labelGold)" font-family="Inter, Roboto, Arial, sans-serif" font-size="17" font-weight="900" letter-spacing="4">
+    CONNECTING
+  </text>
+</svg>

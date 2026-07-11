@@ -24,6 +24,7 @@ import {
   registerPackOpen,
 } from './packApi';
 import genesisPackArt from './assets/packs/nexus-genesis-pack.png';
+import gameEmblem from '../assets/branding/game-emblem.png';
 
 const GAME_NAME = LayetDuelMultiplayer.name;
 const GAME_TITLE = 'NEXUS ARENA';
@@ -631,6 +632,7 @@ function LayetMultiplayerLobby({
   onPlayerAccountChange,
   canPlay,
   onCanPlayChange,
+  lobbyVariant = 'full',
 }) {
   const lobbyClient = useMemo(() => new LobbyClient({ server: GAME_SERVER_URL }), []);
   const [playerName, setPlayerName] = useState('Player');
@@ -641,6 +643,8 @@ function LayetMultiplayerLobby({
 
   const cleanPlayerName = playerName.trim() || 'Player';
   const walletAddress = playerAccount?.walletAddress || '';
+  const isArenaRoute = lobbyVariant === 'arena';
+  const lockedCopy = isArenaRoute ? 'Connect and open a pack on Mint first.' : 'Open pack to unlock.';
 
   useEffect(() => {
     if (playerAccount?.profile?.display_name) {
@@ -736,7 +740,7 @@ function LayetMultiplayerLobby({
         data: { mode: 'private', walletAddress },
       });
 
-      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
+      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -777,12 +781,104 @@ function LayetMultiplayerLobby({
     }
   };
 
+  if (isArenaRoute) {
+    return (
+      <main className="layet-multiplayer-lobby layet-multiplayer-lobby--arena">
+        <section className="layet-arena-stage">
+          <header className="layet-arena-stage__intro">
+            <p className="layet-multiplayer-lobby__eyebrow">Nexus Arena</p>
+            <h1>Choose your <br />duel</h1>
+            <p className="layet-multiplayer-lobby__subtitle">
+              Face a ranked opponent or invite a rival to a private match. Your twenty-card
+              command deck is ready.
+            </p>
+
+            <div className="layet-arena-stage__signal">
+              <span aria-hidden="true" />
+              <div>
+                <strong>{canPlay ? 'Deck combat-ready' : 'Deck access locked'}</strong>
+                <small>{canPlay ? '20 cards verified' : lockedCopy}</small>
+              </div>
+            </div>
+          </header>
+
+          <div className="layet-arena-console">
+            <div className="layet-arena-console__topline">
+              <div>
+                <span>Battle Gate</span>
+                <strong>Play</strong>
+              </div>
+              <b>SEASON 01</b>
+            </div>
+
+            <label className="layet-multiplayer-lobby__field layet-arena-console__name">
+              <span>Player Name</span>
+              <input
+                value={playerName}
+                maxLength={18}
+                onChange={(event) => setPlayerName(event.target.value)}
+              />
+            </label>
+
+            <div className="layet-multiplayer-lobby__modes layet-arena-console__modes" aria-label="Play modes">
+              <button
+                type="button"
+                className="layet-multiplayer-lobby__mode-card layet-multiplayer-lobby__mode-card--ranked"
+                onClick={startMatchmaking}
+                disabled={busy || !canPlay}
+              >
+                <span className="layet-arena-mode__index">01</span>
+                <span>Ranked Duel</span>
+                <strong>Quick Match</strong>
+                <small>{canPlay ? 'Find an opponent · earn leaderboard points' : lockedCopy}</small>
+                <em>Search for rival</em>
+              </button>
+
+              <div className="layet-arena-console__seal" aria-hidden="true">
+                <img src={gameEmblem} alt="" draggable="false" />
+              </div>
+
+              <button
+                type="button"
+                className="layet-multiplayer-lobby__mode-card"
+                onClick={createRoom}
+                disabled={busy || !canPlay}
+              >
+                <span className="layet-arena-mode__index">02</span>
+                <span>Private Duel</span>
+                <strong>Create Room</strong>
+                <small>{canPlay ? 'Invite a friend with a room code' : 'Requires unlocked inventory.'}</small>
+                <em>Create invitation</em>
+              </button>
+            </div>
+
+            <form className="layet-multiplayer-lobby__join layet-arena-console__join" onSubmit={joinRoom}>
+              <label className="layet-multiplayer-lobby__field">
+                <span>Join existing room</span>
+                <input
+                  value={roomCode}
+                  onChange={(event) => setRoomCode(event.target.value)}
+                  placeholder="Enter room code"
+                />
+              </label>
+              <button type="submit" disabled={busy || !canPlay}>Join Duel</button>
+            </form>
+
+            {status && <p className="layet-multiplayer-lobby__status">{status}</p>}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className="layet-multiplayer-lobby">
-      <section className="layet-multiplayer-lobby__shell">
+    <main className={`layet-multiplayer-lobby ${isArenaRoute ? 'layet-multiplayer-lobby--arena' : ''}`}>
+      <section className={`layet-multiplayer-lobby__shell ${isArenaRoute ? 'layet-multiplayer-lobby__shell--arena' : ''}`}>
         <div className="layet-multiplayer-lobby__hero">
-          <p className="layet-multiplayer-lobby__eyebrow">Online card battle</p>
-          <h1>{GAME_TITLE}</h1>
+          <p className="layet-multiplayer-lobby__eyebrow">
+            {isArenaRoute ? 'Arena / Matchmaking' : 'Online card battle'}
+          </p>
+          <h1>{isArenaRoute ? 'Play Mode' : GAME_TITLE}</h1>
           <p className="layet-multiplayer-lobby__subtitle">
             Play ranked matchmaking, create a private room, or join a room code.
           </p>
@@ -796,12 +892,14 @@ function LayetMultiplayerLobby({
             />
           </label>
 
-          <GenesisPackPanel
-            playerName={cleanPlayerName}
-            playerAccount={playerAccount}
-            onInventoryReady={onCanPlayChange}
-            onPlayerAccountChange={onPlayerAccountChange}
-          />
+          {!isArenaRoute && (
+            <GenesisPackPanel
+              playerName={cleanPlayerName}
+              playerAccount={playerAccount}
+              onInventoryReady={onCanPlayChange}
+              onPlayerAccountChange={onPlayerAccountChange}
+            />
+          )}
 
           <div className="layet-multiplayer-lobby__modes" aria-label="Play modes">
             <button
@@ -812,7 +910,7 @@ function LayetMultiplayerLobby({
             >
               <span>Play Mode</span>
               <strong>Multiplayer</strong>
-              <small>{canPlay ? 'Auto matchmaking. Counts for leaderboard.' : 'Open pack to unlock.'}</small>
+              <small>{canPlay ? 'Auto matchmaking. Counts for leaderboard.' : lockedCopy}</small>
             </button>
 
             <button
@@ -850,39 +948,41 @@ function LayetMultiplayerLobby({
           )}
         </div>
 
-        <aside className="layet-multiplayer-lobby__side">
-          <PlayerProfilePanel account={playerAccount} canPlay={canPlay} />
+        {!isArenaRoute && (
+          <aside className="layet-multiplayer-lobby__side">
+            <PlayerProfilePanel account={playerAccount} canPlay={canPlay} />
 
-          <section className="layet-multiplayer-lobby__leaderboard">
-            <div>
-              <p className="layet-multiplayer-lobby__eyebrow">Ranked only</p>
-              <h2>Leaderboard</h2>
-              <small>Only automatic Multiplayer matches are counted.</small>
-            </div>
+            <section className="layet-multiplayer-lobby__leaderboard">
+              <div>
+                <p className="layet-multiplayer-lobby__eyebrow">Ranked only</p>
+                <h2>Leaderboard</h2>
+                <small>Only automatic Multiplayer matches are counted.</small>
+              </div>
 
-            {leaderboard.length > 0 ? (
-              <ol>
-                {leaderboard.map((entry, index) => (
-                  <li key={entry.walletAddress || entry.name}>
-                    <span>{index + 1}</span>
-                    <strong>{entry.name}</strong>
-                    <em>{entry.points} pts</em>
-                    <small>
-                      {entry.wins}W / {entry.losses}L / {entry.draws}D
-                      {entry.lastTxHash ? ' / ON-CHAIN' : ''}
-                    </small>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="layet-multiplayer-lobby__empty">
-                No ranked multiplayer results yet.
-              </p>
-            )}
-          </section>
+              {leaderboard.length > 0 ? (
+                <ol>
+                  {leaderboard.map((entry, index) => (
+                    <li key={entry.walletAddress || entry.name}>
+                      <span>{index + 1}</span>
+                      <strong>{entry.name}</strong>
+                      <em>{entry.points} pts</em>
+                      <small>
+                        {entry.wins}W / {entry.losses}L / {entry.draws}D
+                        {entry.lastTxHash ? ' / ON-CHAIN' : ''}
+                      </small>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="layet-multiplayer-lobby__empty">
+                  No ranked multiplayer results yet.
+                </p>
+              )}
+            </section>
 
-          <MatchHistoryPanel account={playerAccount} />
-        </aside>
+            <MatchHistoryPanel account={playerAccount} />
+          </aside>
+        )}
       </section>
     </main>
   );
@@ -892,6 +992,7 @@ function MatchmakingWaiting({ session, onMatched, onCancel }) {
   const lobbyClient = useMemo(() => new LobbyClient({ server: GAME_SERVER_URL }), []);
   const [status, setStatus] = useState('Waiting for opponent...');
   const [canceling, setCanceling] = useState(false);
+  const isPrivateRoom = session.mode === 'private';
 
   useEffect(() => {
     let active = true;
@@ -933,20 +1034,52 @@ function MatchmakingWaiting({ session, onMatched, onCancel }) {
     }
   };
 
+  const copyRoomCode = async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(session.matchID);
+  };
+
   return (
-    <main className="layet-multiplayer-lobby">
-      <section className="layet-multiplayer-lobby__panel layet-multiplayer-lobby__panel--waiting">
-        <p className="layet-multiplayer-lobby__eyebrow">{GAME_TITLE}</p>
-        <h1>Searching</h1>
-        <p className="layet-multiplayer-lobby__status">{status}</p>
-        <small className="layet-multiplayer-lobby__server">Auto matchmaking</small>
+    <main
+      className={[
+        'layet-multiplayer-lobby',
+        'nexus-waiting-screen',
+        isPrivateRoom ? 'nexus-waiting-screen--private' : 'nexus-waiting-screen--ranked',
+      ].join(' ')}
+    >
+      <section className="nexus-waiting-gate">
+        <header className="nexus-waiting-gate__header">
+          <span>{isPrivateRoom ? 'Private Battle Gate' : 'Ranked Battle Gate'}</span>
+          <strong><i /> 1 / 2 players</strong>
+        </header>
+
+        <div className="nexus-waiting-gate__body">
+          <div className="nexus-waiting-gate__emblem" aria-hidden="true">
+            <span />
+            <img src={gameEmblem} alt="" draggable="false" />
+          </div>
+          <div className="nexus-waiting-gate__copy">
+            <p>{isPrivateRoom ? 'Invitation active' : 'Matchmaking protocol'}</p>
+            <h1>{isPrivateRoom ? 'Room ready' : 'Finding rival'}</h1>
+            <small>{status}</small>
+          </div>
+        </div>
+
+        {isPrivateRoom ? (
+          <div className="nexus-waiting-gate__code">
+            <span>Room code</span>
+            <strong>{session.matchID}</strong>
+            <button type="button" onClick={copyRoomCode}>Copy</button>
+          </div>
+        ) : null}
+
         <button
           type="button"
-          className="layet-multiplayer-lobby__secondary"
+          className="nexus-waiting-gate__cancel"
           onClick={cancelMatchmaking}
           disabled={canceling}
         >
-          Cancel
+          {canceling ? 'Closing gate...' : isPrivateRoom ? 'Close room' : 'Cancel search'}
         </button>
       </section>
     </main>
@@ -1005,12 +1138,19 @@ function LocalPreviewMatch({ onBackToLobby }) {
   );
 }
 
-export default function LayetMultiplayer({ onExit }) {
+export default function LayetMultiplayer({
+  onExit,
+  playerAccountOverride,
+  onPlayerAccountSync,
+  lobbyVariant = 'full',
+}) {
   const [session, setSession] = useState(null);
   const [mode, setMode] = useState('lobby');
-  const [playerAccount, setPlayerAccountState] = useState(() => readStoredPlayerAccount());
+  const [playerAccount, setPlayerAccountState] = useState(
+    () => normalizeDashboard(playerAccountOverride) || readStoredPlayerAccount()
+  );
   const [canPlay, setCanPlay] = useState(() => {
-    const storedAccount = readStoredPlayerAccount();
+    const storedAccount = normalizeDashboard(playerAccountOverride) || readStoredPlayerAccount();
     return Boolean(storedAccount?.authenticated && storedAccount?.inventory?.length);
   });
 
@@ -1019,7 +1159,15 @@ export default function LayetMultiplayer({ onExit }) {
     setPlayerAccountState(dashboard);
     writeStoredPlayerAccount(dashboard);
     setCanPlay(Boolean(dashboard?.authenticated && dashboard?.inventory?.length));
+    onPlayerAccountSync?.(dashboard);
   };
+
+  useEffect(() => {
+    const dashboard = normalizeDashboard(playerAccountOverride);
+    if (!dashboard) return;
+    setPlayerAccountState(dashboard);
+    setCanPlay(Boolean(dashboard.authenticated && dashboard.inventory?.length));
+  }, [playerAccountOverride]);
 
   if (mode === 'local') {
     return <LocalPreviewMatch onBackToLobby={() => setMode('lobby')} />;
@@ -1090,6 +1238,7 @@ export default function LayetMultiplayer({ onExit }) {
       canPlay={canPlay}
       onCanPlayChange={setCanPlay}
       onPlayerAccountChange={updatePlayerAccount}
+      lobbyVariant={lobbyVariant}
       onJoinOnline={(nextSession) => {
         setSession(nextSession);
         setMode('online');

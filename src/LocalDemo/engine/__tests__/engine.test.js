@@ -27,16 +27,23 @@ import { playAutoTurn, playBotTurn, chooseSummonIndex } from '../bot';
 // ---- helpers ---------------------------------------------------------------
 const clone = (s) => JSON.parse(JSON.stringify(s));
 
+// NOTE: default element is WATER on purpose. WATER's effect only triggers at the end of
+// the turn a card is *summoned* (summonedThisTurn), so cards placed directly on the field
+// in these structural/combat tests have no effect on combat math — keeping the base-combat
+// assertions valid. Per-element effects are covered explicitly in the "elemental effects" block.
 const fieldCard = (id, power, extra = {}) => ({
   instanceId: id,
   key: 'TST',
   name: `Card_${id}`,
-  element: 'FIRE',
+  element: 'WATER',
   power,
+  basePower: power,
   rarity: 'normal',
   ability: '',
   artwork: '',
   attackedThisTurn: false,
+  summonedThisTurn: false,
+  earthShieldUsed: false,
   ...extra,
 });
 
@@ -309,5 +316,319 @@ describe('bot and full match', () => {
       }
       expect([RESULT.PLAYER, RESULT.BOT, RESULT.DRAW]).toContain(s.result);
     }
+  });
+});
+
+
+// ---- elemental effects (mission section 6) --------------------------------
+describe('elemental effects', () => {
+  // FIRE: +100 effective power when attacking a card (not on a direct attack).
+  describe('FIRE', () => {
+    test('gains +100 when attacking a card: turns a loss into a win', () => {
+      const s = scenario({
+        playerField: [fieldCard('f1', 600, { element: 'FIRE' })],
+        botField: [fieldCard('b1', 650, { element: 'WATER' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 'f1', 'b1');
+      expect(r.ok).toBe(true);
+      // 600 (+100) = 700 > 650 -> target destroyed, overflow 50
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.player.field.filter(Boolean)).toHaveLength(1);
+      expect(r.state.players.bot.hp).toBe(2000 - 50);
+    });
+
+    test('+100 can force a mutual-destruction tie', () => {
+      const s = scenario({
+        playerField: [fieldCard('f1', 600, { element: 'FIRE' })],
+        botField: [fieldCard('b1', 700, { element: 'WATER' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 'f1', 'b1');
+      // 600 (+100) = 700 == 700 -> both destroyed, no damage
+      expect(r.state.players.player.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.bot.hp).toBe(2000);
+      expect(r.state.players.player.hp).toBe(2000);
+    });
+
+    test('does NOT apply the +100 bonus on a direct attack', () => {
+      const s = scenario({ playerField: [fieldCard('f1', 600, { element: 'FIRE' })], botField: [] });
+      const r = attack(s, SIDES.PLAYER, 'f1', null);
+      expect(r.state.players.bot.hp).toBe(2000 - 600); // base power only
+    });
+  });
+
+  // ELECTRIC: +100 extra HP damage when its attack destroys the target.
+  describe('ELECTRIC', () => {
+    test('deals +100 extra HP when it destroys the target', () => {
+      const s = scenario({
+        playerField: [fieldCard('e1', 800, { element: 'ELECTRIC' })],
+        botField: [fieldCard('b1', 500, { element: 'WATER' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 'e1', 'b1');
+      // overflow 300 + electric 100
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.bot.hp).toBe(2000 - 300 - 100);
+    });
+
+    test('no +100 bonus on a direct attack (no target destroyed)', () => {
+      const s = scenario({ playerField: [fieldCard('e1', 500, { element: 'ELECTRIC' })], botField: [] });
+      const r = attack(s, SIDES.PLAYER, 'e1', null);
+      expect(r.state.players.bot.hp).toBe(2000 - 500);
+    });
+  });
+
+  // WATER: heals its owner +100 at the end of the turn it was summoned.
+  describe('WATER', () => {
+    test('normal heal: +100 below the starting HP', () => {
+      const s = scenario({ playerHand: [fieldCard('w1', 450, { element: 'WATER' })] });
+      s.players.player.hp = 1500;
+      const summoned = summon(s, SIDES.PLAYER, 0).state;
+      const afterEnd = endTurn(summoned, SIDES.PLAYER).state;
+      expect(afterEnd.players.player.hp).toBe(1600);
+      const log = afterEnd.log.join('\n');
+      expect(log).toContain('Eau :');
+      expect(log).not.toContain('surcharge de vie'); // normal heal, no overheal note
+    });
+
+    test('overheal: heals +100 ABOVE the starting HP (2000 -> 2100)', () => {
+      const s = scenario({ playerHand: [fieldCard('w1', 450, { element: 'WATER' })] });
+      s.players.player.hp = 2000;
+      const summoned = summon(s, SIDES.PLAYER, 0).state;
+      const afterEnd = endTurn(summoned, SIDES.PLAYER).state;
+      expect(afterEnd.players.player.hp).toBe(2100); // overheal allowed
+      expect(afterEnd.log.join('\n')).toContain('(surcharge de vie)');
+    });
+
+    test('overheal is hard-capped at 2300 PV', () => {
+      const s = scenario({ playerHand: [fieldCard('w1', 450, { element: 'WATER' })] });
+      s.players.player.hp = 2250;
+      const summoned = summon(s, SIDES.PLAYER, 0).state;
+      const afterEnd = endTurn(summoned, SIDES.PLAYER).state;
+      expect(afterEnd.players.player.hp).toBe(2300); // 2250 + 100 -> capped at 2300
+      expect(afterEnd.log.join('\n')).toContain('(surcharge de vie)');
+    });
+
+    test('at the 2300 cap: no further heal, and the log never says "de 0 PV"', () => {
+      const s = scenario({ playerHand: [fieldCard('w1', 450, { element: 'WATER' })] });
+      s.players.player.hp = 2300;
+      const summoned = summon(s, SIDES.PLAYER, 0).state;
+      const afterEnd = endTurn(summoned, SIDES.PLAYER).state;
+      expect(afterEnd.players.player.hp).toBe(2300); // unchanged at the cap
+      const log = afterEnd.log.join('\n');
+      expect(log).toContain('Eau :'); // WATER still logged
+      expect(log).toContain('vie déjà au maximum'); // dedicated at-cap message
+      expect(log).not.toContain('de 0 PV'); // never "soigne ... de 0 PV"
+    });
+
+    test('only heals the turn it is summoned, not later turns', () => {
+      const s = scenario({ playerHand: [fieldCard('w1', 450, { element: 'WATER' })] });
+      s.players.player.hp = 1500;
+      let st = summon(s, SIDES.PLAYER, 0).state;
+      st = endTurn(st, SIDES.PLAYER).state; // heal -> 1600, now bot's turn
+      st = endTurn(st, SIDES.BOT).state; // back to player; flag reset at turn start
+      st = endTurn(st, SIDES.PLAYER).state; // no heal this time
+      expect(st.players.player.hp).toBe(1600);
+    });
+  });
+
+  // EARTH: survives the first destruction at power 100, dies the second time.
+  describe('EARTH', () => {
+    test('survives the first lethal hit (power -> 100, no overflow), dies the second', () => {
+      const s = scenario({
+        playerField: [
+          fieldCard('att', 900, { element: 'WATER' }),
+          fieldCard('att2', 200, { element: 'WATER' }),
+        ],
+        botField: [fieldCard('rock', 700, { element: 'EARTH' })],
+      });
+      const r1 = attack(s, SIDES.PLAYER, 'att', 'rock');
+      const rock = r1.state.players.bot.field.find((c) => c && c.instanceId === 'rock');
+      expect(rock).toBeTruthy(); // survived
+      expect(rock.power).toBe(100);
+      expect(rock.earthShieldUsed).toBe(true);
+      expect(r1.state.players.bot.hp).toBe(2000); // no overflow on the saved hit
+
+      const r2 = attack(r1.state, SIDES.PLAYER, 'att2', 'rock');
+      expect(r2.state.players.bot.field.filter(Boolean)).toHaveLength(0); // now destroyed
+      expect(r2.state.players.bot.hp).toBe(2000 - 100); // overflow 200-100
+    });
+  });
+
+  // NATURE: ALWAYS draws a card on summon when the deck is not empty.
+  describe('NATURE', () => {
+    test('always draws 1 on summon when the deck is not empty', () => {
+      const s = scenario({ playerHand: [fieldCard('n1', 400, { element: 'NATURE' })] });
+      s.players.player.deck = [fieldCard('seed', 300)];
+      const r = summon(s, SIDES.PLAYER, 0);
+      expect(r.ok).toBe(true);
+      expect(r.state.players.player.hand).toHaveLength(1);
+      expect(r.state.players.player.hand[0].instanceId).toBe('seed');
+      expect(r.state.players.player.deck).toHaveLength(0);
+      expect(r.state.log.join('\n')).toContain('Nature :');
+    });
+
+    test('still draws even when the hand is full (>= handSize)', () => {
+      const fillers = Array.from({ length: 6 }, (_, i) => fieldCard(`x${i}`, 100));
+      const s = scenario({ playerHand: [fieldCard('n1', 400, { element: 'NATURE' }), ...fillers] });
+      s.players.player.deck = [fieldCard('seed', 300)];
+      const r = summon(s, SIDES.PLAYER, 0); // hand 7 -> 6 after summon, then ALWAYS draw -> 7
+      expect(r.ok).toBe(true);
+      expect(r.state.players.player.hand).toHaveLength(7);
+      expect(r.state.players.player.deck).toHaveLength(0); // drew the seed
+      expect(r.state.players.player.hand.some((c) => c.instanceId === 'seed')).toBe(true);
+    });
+
+    test('does NOT draw only when the deck is empty (logs pioche vide)', () => {
+      const s = scenario({ playerHand: [fieldCard('n1', 400, { element: 'NATURE' })] });
+      s.players.player.deck = [];
+      const r = summon(s, SIDES.PLAYER, 0);
+      expect(r.ok).toBe(true);
+      expect(r.state.players.player.hand).toHaveLength(0);
+      expect(r.state.players.player.deck).toHaveLength(0);
+      expect(r.state.log.join('\n')).toContain('pioche vide');
+    });
+  });
+
+  // SHADOW: drains 100 HP from the owner of a card it destroys.
+  describe('SHADOW', () => {
+    test('attacker drains 100 extra when it destroys the target', () => {
+      const s = scenario({
+        playerField: [fieldCard('s1', 800, { element: 'SHADOW' })],
+        botField: [fieldCard('b1', 500, { element: 'WATER' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 's1', 'b1');
+      // overflow 300 + shadow 100
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.bot.hp).toBe(2000 - 300 - 100);
+    });
+
+    test('no drain on a direct attack (no card destroyed)', () => {
+      const s = scenario({ playerField: [fieldCard('s1', 500, { element: 'SHADOW' })], botField: [] });
+      const r = attack(s, SIDES.PLAYER, 's1', null);
+      expect(r.state.players.bot.hp).toBe(2000 - 500);
+    });
+
+    test('drains when it destroys an attacker as a defender', () => {
+      const s = scenario({
+        playerField: [fieldCard('p1', 300, { element: 'WATER' })],
+        botField: [fieldCard('sd', 800, { element: 'SHADOW' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 'p1', 'sd');
+      // attacker loses: overflow 500 + shadow 100 against the attacker's owner
+      expect(r.state.players.player.field.filter(Boolean)).toHaveLength(0);
+      expect(r.state.players.player.hp).toBe(2000 - 500 - 100);
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(1);
+    });
+  });
+
+  // Interactions: EARTH's survival blocks the ELECTRIC/SHADOW on-kill bonuses.
+  describe('EARTH interaction', () => {
+    test('EARTH survival blocks the ELECTRIC bonus (no destruction)', () => {
+      const s = scenario({
+        playerField: [fieldCard('e1', 800, { element: 'ELECTRIC' })],
+        botField: [fieldCard('rock', 700, { element: 'EARTH' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 'e1', 'rock');
+      const rock = r.state.players.bot.field.find((c) => c && c.instanceId === 'rock');
+      expect(rock).toBeTruthy(); // EARTH survived
+      expect(rock.power).toBe(100);
+      expect(r.state.players.bot.hp).toBe(2000); // no overflow, no electric bonus
+    });
+
+    test('EARTH survival blocks the SHADOW drain (no destruction)', () => {
+      const s = scenario({
+        playerField: [fieldCard('s1', 800, { element: 'SHADOW' })],
+        botField: [fieldCard('rock', 700, { element: 'EARTH' })],
+      });
+      const r = attack(s, SIDES.PLAYER, 's1', 'rock');
+      expect(r.state.players.bot.field.filter(Boolean)).toHaveLength(1); // survived
+      expect(r.state.players.bot.hp).toBe(2000); // no drain
+    });
+  });
+});
+
+
+// ---- full playable loop: effects actually fire in real bot-vs-bot play -----
+describe('full match exercises every elemental effect', () => {
+  // Deterministic: fixed seeds + seeded RNG => identical games => identical logs.
+  const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
+  const makeDeck = (template, n = 18) => Array.from({ length: n }, () => ({ ...template }));
+
+  function runFullMatch(opts) {
+    let s = createInitialState(opts);
+    let guard = 0;
+    while (!s.result && guard < 100) {
+      guard++;
+      s = playAutoTurn(s, s.activeSide);
+      expect(s.turn).toBeLessThanOrEqual(8);
+      expect(s.players.player.hp).toBeGreaterThanOrEqual(0);
+      expect(s.players.bot.hp).toBeGreaterThanOrEqual(0);
+    }
+    expect([RESULT.PLAYER, RESULT.BOT, RESULT.DRAW]).toContain(s.result);
+    return s;
+  }
+
+  test('every default match terminates start -> victory/defeat/draw within 8 turns', () => {
+    for (const seed of SEEDS) {
+      const s = runFullMatch({ seed });
+      expect(s.winnerReason).toBeTruthy();
+    }
+  });
+
+  // Each effect is driven through the REAL engine (real summon/attack/endTurn via the bot
+  // simulation), with crafted decks so the trigger is deterministic, and verified by its log
+  // marker. This proves the effects are wired into actual gameplay, not just unit-tested.
+  test('FIRE marker fires when a FIRE card attacks a card', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.PYRA), // FIRE 600
+      botDeck: makeDeck(CHARACTERS.SYLVA), // NATURE 400 (something to attack)
+    });
+    expect(s.log.join('\n')).toContain('Feu :');
+  });
+
+  test('ELECTRIC marker fires when its attack destroys the target', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.NYRA), // ELECTRIC 500
+      botDeck: makeDeck(CHARACTERS.SYLVA), // NATURE 400 (gets destroyed)
+    });
+    expect(s.log.join('\n')).toContain('Foudre :');
+  });
+
+  test('SHADOW marker fires when its attack destroys the target', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.NOX), // SHADOW 800
+      botDeck: makeDeck(CHARACTERS.SYLVA), // NATURE 400 (gets destroyed)
+    });
+    expect(s.log.join('\n')).toContain('Ombre :');
+  });
+
+  test('EARTH marker fires when an EARTH card survives a lethal hit', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.NOX), // SHADOW 800 attacker
+      botDeck: makeDeck(CHARACTERS.GORAM), // EARTH 700 survives the first hit
+    });
+    expect(s.log.join('\n')).toContain('Terre :');
+  });
+
+  test('WATER marker fires at the end of the turn a WATER card is summoned', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.NERIS), // WATER 450
+      botDeck: makeDeck(CHARACTERS.NERIS),
+    });
+    expect(s.log.join('\n')).toContain('Eau :');
+  });
+
+  test('NATURE marker fires on summon in a real match (always draws)', () => {
+    const s = runFullMatch({
+      seed: 1,
+      playerDeck: makeDeck(CHARACTERS.SYLVA), // NATURE 400
+      botDeck: makeDeck(CHARACTERS.SYLVA),
+    });
+    expect(s.log.join('\n')).toContain('Nature :');
   });
 });

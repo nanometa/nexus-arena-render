@@ -1,9 +1,9 @@
 /**
- * Local demo — temporary card data for the 6 test characters.
+ * Local demo — card data for the 6 test characters.
  *
- * IMPORTANT (first test): data is intentionally simple and deterministic.
- * Cards have NO complex effects yet. `ability` is a short display label only and
- * does NOT alter combat. Combat is resolved purely on `power`.
+ * Data is intentionally simple and deterministic. Each character maps 1:1 to an element,
+ * and each element carries a deterministic v1 effect (see ELEMENT_EFFECT below; behaviour
+ * implemented in gameLogic.js). `ability` is the short display label for that effect.
  *
  * Deck rules implemented here:
  *  - DECK_SIZE = 18
@@ -65,7 +65,44 @@ export const RARITY_META = {
 };
 
 /**
- * The 6 test characters. `power` is the only stat used by combat for now.
+ * Canonical, deterministic v1 elemental effects (mission section 6).
+ * The effect is keyed purely by `element` (1 character = 1 element = 1 effect), so the
+ * engine stays data-driven. `label` is the short text shown on the card; `summary` is the
+ * longer description used in docs / tooltips. The actual behaviour lives in gameLogic.js.
+ */
+export const ELEMENT_EFFECT = {
+  [ELEMENTS.ELECTRIC]: {
+    label: 'Foudre : +100 dégâts aux PV si l’attaque détruit la cible.',
+    summary:
+      "Quand cette carte attaque et détruit la carte ciblée, l'adversaire perd 100 PV supplémentaires.",
+  },
+  [ELEMENTS.FIRE]: {
+    label: 'Brasier : +100 puissance quand elle attaque une carte.',
+    summary: 'Quand elle attaque une carte (pas en direct), elle gagne +100 puissance le temps du combat.',
+  },
+  [ELEMENTS.WATER]: {
+    label: 'Marée : +100 PV au tour de son invocation (surcharge jusqu’à 2300).',
+    summary:
+      "À la fin du tour où elle est invoquée, soigne son joueur de 100 PV ; la surcharge de vie au-dessus de 2000 PV est permise, plafonnée à 2300 PV.",
+  },
+  [ELEMENTS.EARTH]: {
+    label: 'Roche : survit à sa 1re destruction (tombe à 100).',
+    summary:
+      'La première fois qu’elle devrait être détruite, elle survit et sa puissance tombe à 100 (aucun dégât de débordement).',
+  },
+  [ELEMENTS.NATURE]: {
+    label: 'Sève : pioche 1 carte à chaque invocation (si la pioche n’est pas vide).',
+    summary: 'Quand elle est invoquée, pioche toujours 1 carte tant que la pioche n’est pas vide.',
+  },
+  [ELEMENTS.SHADOW]: {
+    label: 'Ombre : si elle détruit une carte, l’adversaire perd 100 PV.',
+    summary: "Quand cette carte détruit une carte adverse au combat, le propriétaire de cette carte perd 100 PV.",
+  },
+};
+
+/**
+ * The 6 test characters. `power` is the base combat stat; the per-element effect
+ * (see ELEMENT_EFFECT + gameLogic.js) is applied deterministically by the engine.
  */
 export const CHARACTERS = {
   NYRA: {
@@ -74,7 +111,7 @@ export const CHARACTERS = {
     element: ELEMENTS.ELECTRIC,
     power: 500,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.ELECTRIC].label,
     artwork: `${ARTWORK_BASE}/nyra-electric-sentinel-premium-v2.png`,
   },
   PYRA: {
@@ -83,7 +120,7 @@ export const CHARACTERS = {
     element: ELEMENTS.FIRE,
     power: 600,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.FIRE].label,
     artwork: `${ARTWORK_BASE}/pyra-fire-duelist-premium-v2.png`,
   },
   NERIS: {
@@ -92,7 +129,7 @@ export const CHARACTERS = {
     element: ELEMENTS.WATER,
     power: 450,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.WATER].label,
     artwork: `${ARTWORK_BASE}/neris-water-oracle-premium-v2.png`,
   },
   GORAM: {
@@ -101,7 +138,7 @@ export const CHARACTERS = {
     element: ELEMENTS.EARTH,
     power: 700,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.EARTH].label,
     artwork: `${ARTWORK_BASE}/goram-earth-colossus-premium-v2.png`,
   },
   SYLVA: {
@@ -110,7 +147,7 @@ export const CHARACTERS = {
     element: ELEMENTS.NATURE,
     power: 400,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.NATURE].label,
     artwork: `${ARTWORK_BASE}/sylva-nature-warden-premium-v2.png`,
   },
   NOX: {
@@ -119,7 +156,7 @@ export const CHARACTERS = {
     element: ELEMENTS.SHADOW,
     power: 800,
     rarity: RARITY.NORMAL,
-    ability: 'Aucun effet (test)',
+    ability: ELEMENT_EFFECT[ELEMENTS.SHADOW].label,
     artwork: `${ARTWORK_BASE}/nox-shadow-revenant-premium-v2.png`,
   },
 };
@@ -136,7 +173,7 @@ export const SAMPLE_LEGENDARY = {
   element: ELEMENTS.SHADOW,
   power: 1200,
   rarity: RARITY.LEGENDARY,
-  ability: 'Légendaire — nécessite 2 sacrifices (test)',
+  ability: `Légendaire (2 sacrifices) — ${ELEMENT_EFFECT[ELEMENTS.SHADOW].label}`,
   artwork: `${ARTWORK_BASE}/nox-shadow-revenant-premium-v2.png`,
 };
 

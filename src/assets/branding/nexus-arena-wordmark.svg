@@ -1,0 +1,56 @@
+<svg width="980" height="320" viewBox="0 0 980 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NEXUS ARENA">
+  <defs>
+    <linearGradient id="nexusGold" x1="126" y1="80" x2="854" y2="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f9e7a8"/>
+      <stop offset="0.22" stop-color="#9b6c29"/>
+      <stop offset="0.48" stop-color="#fff6d8"/>
+      <stop offset="0.7" stop-color="#b98637"/>
+      <stop offset="1" stop-color="#f7ddb0"/>
+    </linearGradient>
+    <linearGradient id="nexusSteel" x1="170" y1="118" x2="810" y2="318" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="0.34" stop-color="#cbd5e1"/>
+      <stop offset="0.58" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+    <radialGradient id="coreGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(490 206) rotate(90) scale(168 430)">
+      <stop offset="0" stop-color="#2563eb" stop-opacity="0.65"/>
+      <stop offset="0.42" stop-color="#7c3aed" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softBlueGlow" x="0" y="0" width="980" height="390" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.11 0 0 0 0 0.47 0 0 0 0 1 0 0 0 0.5 0"/>
+      <feBlend in2="SourceGraphic" mode="screen"/>
+    </filter>
+    <filter id="titleShadow" x="70" y="60" width="840" height="250" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#020617" flood-opacity="0.88"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#38bdf8" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="490" cy="206" rx="430" ry="168" fill="url(#coreGlow)"/>
+
+  <g opacity="0.72" filter="url(#softBlueGlow)">
+    <path d="M174 246H366L408 206H572L614 246H806" stroke="#2dd4ff" stroke-width="1.5"/>
+    <path d="M212 270H390L430 236H550L590 270H768" stroke="#7c3aed" stroke-width="1"/>
+    <circle cx="490" cy="236" r="8" stroke="#f8d477" stroke-width="1.2"/>
+    <circle cx="490" cy="236" r="18" stroke="#2563eb" stroke-opacity="0.55" stroke-width="1"/>
+  </g>
+
+  <text x="490" y="82" text-anchor="middle" fill="#f8d477" font-family="Inter, Roboto, Arial, sans-serif" font-size="14" font-weight="800" letter-spacing="12">
+    WEB3 COLLECTIBLE CARD GAME
+  </text>
+
+  <g filter="url(#titleShadow)">
+    <text x="490" y="196" text-anchor="middle" fill="url(#nexusSteel)" stroke="#111827" stroke-width="3" paint-order="stroke fill" font-family="Inter, Roboto, Arial Black, sans-serif" font-size="92" font-weight="950" letter-spacing="10">
+      NEXUS
+    </text>
+    <text x="490" y="252" text-anchor="middle" fill="url(#nexusGold)" stroke="#0f172a" stroke-width="2" paint-order="stroke fill" font-family="Inter, Roboto, Arial, sans-serif" font-size="38" font-weight="900" letter-spacing="20">
+      ARENA
+    </text>
+  </g>
+
+  <path d="M282 282H698" stroke="url(#nexusGold)" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M316 302H664" stroke="#38bdf8" stroke-opacity="0.38" stroke-width="1" stroke-linecap="round"/>
+</svg>

@@ -234,6 +234,14 @@ export default function LocalDemo({ onExit }) {
         {selectedAttacker && targeting && !targeting.direct && (
           <span className="center__hint">Choisissez une carte ennemie à attaquer</span>
         )}
+        {selectedAttacker && (
+          <button
+            className="ld-btn ld-btn--ghost ld-btn--cancel"
+            onClick={() => setSelectedAttacker(null)}
+          >
+            Annuler la sélection
+          </button>
+        )}
         <button className="ld-btn ld-btn--end" onClick={handleEndTurn} disabled={!isPlayerTurn}>
           Terminer le tour
         </button>

@@ -22,9 +22,14 @@ import {
   legalTargets,
   findOnField,
 } from './gameLogic';
-import { RARITY } from './cards';
+import { RARITY, ELEMENTS } from './cards';
 
 const oppOf = (side) => (side === SIDES.PLAYER ? SIDES.BOT : SIDES.PLAYER);
+
+/** Effective attack power against a card, including the FIRE +100 bonus. */
+function effectiveAttackPower(card) {
+  return card.power + (card.element === ELEMENTS.FIRE ? 100 : 0);
+}
 
 /** Index in hand of the best normal card the bot can summon, or -1. */
 export function chooseSummonIndex(state, side) {
@@ -56,14 +61,15 @@ export function chooseAttack(state, side, attackerInstanceId) {
   const attacker = attackerFound.card;
 
   const oppPlayer = state.players[oppOf(side)];
+  const attackPower = effectiveAttackPower(attacker);
   let best = null;
   let bestTargetPower = -1;
   for (const id of targeting.targets) {
     const found = findOnField(oppPlayer, id);
     if (!found) continue;
     const targetCard = found.card;
-    // Only attack when the bot wins the exchange (no suicidal trades).
-    if (attacker.power > targetCard.power) {
+    // Only attack when the bot wins the exchange (no suicidal trades), accounting for FIRE.
+    if (attackPower > targetCard.power) {
       if (
         targetCard.power > bestTargetPower ||
         (targetCard.power === bestTargetPower && (best === null || id < best))

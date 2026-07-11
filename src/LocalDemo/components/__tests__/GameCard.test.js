@@ -16,7 +16,7 @@ test('renders all dynamic fields (name, element, power, rarity, ability)', () =>
   expect(out).toContain('Électrique'); // element label
   expect(out).toContain('500'); // power
   expect(out).toContain('Normale'); // rarity label
-  expect(out).toContain('Aucun effet'); // ability
+  expect(out).toContain('Foudre'); // ability (ELECTRIC effect label)
 });
 
 test('loads the artwork via an <img> with the card artwork path (object-fit layer)', () => {

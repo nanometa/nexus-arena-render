@@ -1,0 +1,30 @@
+<svg width="900" height="900" viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Nexus arena arcane UI sigil">
+  <defs>
+    <radialGradient id="blueGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(450 450) rotate(90) scale(410)">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.42"/>
+      <stop offset="0.42" stop-color="#2563eb" stop-opacity="0.16"/>
+      <stop offset="0.72" stop-color="#7c3aed" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="goldLine" x1="118" y1="136" x2="782" y2="764" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f8d477" stop-opacity="0.1"/>
+      <stop offset="0.5" stop-color="#f8d477" stop-opacity="0.64"/>
+      <stop offset="1" stop-color="#f8d477" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="glow" x="0" y="0" width="900" height="900" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.19 0 0 0 0 0.57 0 0 0 0 1 0 0 0 0.55 0"/>
+      <feBlend in2="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+  <circle cx="450" cy="450" r="410" fill="url(#blueGlow)"/>
+  <g opacity="0.58" filter="url(#glow)">
+    <circle cx="450" cy="450" r="274" stroke="#38bdf8" stroke-opacity="0.28"/>
+    <circle cx="450" cy="450" r="210" stroke="url(#goldLine)" stroke-width="1.5"/>
+    <circle cx="450" cy="450" r="142" stroke="#7c3aed" stroke-opacity="0.32"/>
+    <path d="M450 146L532 368L754 450L532 532L450 754L368 532L146 450L368 368L450 146Z" stroke="url(#goldLine)" stroke-width="1.5"/>
+    <path d="M450 218L514 386L682 450L514 514L450 682L386 514L218 450L386 386L450 218Z" stroke="#38bdf8" stroke-opacity="0.34"/>
+    <path d="M270 270H630V630H270V270Z" stroke="#f8d477" stroke-opacity="0.22"/>
+    <path d="M318 210H582M318 690H582M210 318V582M690 318V582" stroke="#38bdf8" stroke-opacity="0.22" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -17,6 +17,16 @@
  *  - immediate win if opponent HP reaches 0
  *  - after turn 8: highest HP wins, equal HP = draw
  *
+ * Deterministic elemental effects (mission section 6), keyed by card.element:
+ *  - ELECTRIC: when it attacks and DESTROYS the target card, the defender loses +100 HP.
+ *  - FIRE:     +100 effective power while attacking a CARD (not on a direct attack).
+ *  - WATER:    at the end of the turn it was summoned, heals its owner +100 HP — overheal
+ *              ABOVE startingHp is allowed, hard-capped at config.overhealCap (2300).
+ *  - EARTH:    the first time it would be destroyed, it survives at power 100 (no overflow).
+ *  - NATURE:   on summon, always draws 1 card if the deck is not empty.
+ *  - SHADOW:   when it destroys an opposing card in combat, that card's owner loses +100 HP.
+ * EARTH's survival blocks the ELECTRIC/SHADOW "on destroy" bonuses (no real destruction).
+ *
  * Mutating helpers operate on a deep-cloned state and return a NEW state. Action
  * functions return { state, ok, error } so the UI/bot/tests can detect rejected moves
  * (the protections required by the task).
@@ -25,6 +35,7 @@
 import {
   buildDefaultDeck,
   RARITY,
+  ELEMENTS,
   LEGENDARY_SACRIFICES,
 } from './cards';
 
@@ -33,6 +44,7 @@ export const RESULT = { PLAYER: 'player', BOT: 'bot', DRAW: 'draw' };
 
 export const DEFAULT_CONFIG = {
   startingHp: 2000,
+  overhealCap: 2300, // WATER may overheal above startingHp, up to this hard cap
   handSize: 6,
   fieldSlots: 4,
   maxTurns: 8,
@@ -74,11 +86,13 @@ function instantiate(template, side, index) {
     name: template.name,
     element: template.element,
     power: template.power,
+    basePower: template.power,
     rarity: template.rarity,
     ability: template.ability,
     artwork: template.artwork,
     attackedThisTurn: false,
     summonedThisTurn: false,
+    earthShieldUsed: false, // EARTH effect: consumed the first time the card would be destroyed
   };
 }
 
@@ -262,7 +276,43 @@ export function summon(state, side, handIndex, opts = {}) {
   next.flags.summonedThisTurn = true;
   next.log.push(`${sideLabel(side)} invoque ${card.name} (puissance ${card.power}).`);
 
+  // NATURE effect: on summon, ALWAYS draw 1 card if the deck is not empty.
+  if (card.element === ELEMENTS.NATURE) {
+    if (player.deck.length > 0) {
+      const drawn = player.deck.shift();
+      player.hand.push(drawn);
+      next.log.push(`Nature : ${card.name} fait piocher ${drawn.name} à ${sideLabel(side)}.`);
+    } else {
+      next.log.push(`Nature : ${card.name} ne peut pas piocher (pioche vide).`);
+    }
+  }
+
   return { state: next, ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Combat destruction helper (applies the EARTH survival effect).
+// ---------------------------------------------------------------------------
+
+/**
+ * Send the field card at `index` (owned by `ownerSide`) to the graveyard.
+ * EARTH effect: the first time the card would be destroyed it survives instead,
+ * its power drops to 100 and its shield is consumed.
+ * @returns {boolean} true if the card was actually destroyed, false if it survived.
+ */
+function tryDestroy(state, ownerSide, index) {
+  const player = state.players[ownerSide];
+  const card = player.field[index];
+  if (!card) return false;
+  if (card.element === ELEMENTS.EARTH && !card.earthShieldUsed) {
+    card.earthShieldUsed = true;
+    card.power = 100;
+    state.log.push(`Terre : ${card.name} résiste à la destruction et tombe à 100 puissance.`);
+    return false;
+  }
+  player.graveyard.push(card);
+  player.field[index] = null;
+  return true;
 }
 
 export function attack(state, side, attackerInstanceId, targetInstanceId = null) {
@@ -287,7 +337,7 @@ export function attack(state, side, attackerInstanceId, targetInstanceId = null)
   const attacker = findOnField(attackerPlayer, attackerInstanceId).card;
 
   if (targetInstanceId === null) {
-    // direct attack
+    // direct attack — base power, no FIRE bonus (FIRE only triggers against a card)
     defenderPlayer.hp -= attacker.power;
     attacker.attackedThisTurn = true;
     next.log.push(
@@ -296,30 +346,68 @@ export function attack(state, side, attackerInstanceId, targetInstanceId = null)
   } else {
     const target = findOnField(defenderPlayer, targetInstanceId);
     const t = target.card;
-    if (attacker.power > t.power) {
-      defenderPlayer.graveyard.push(t);
-      defenderPlayer.field[target.index] = null;
-      defenderPlayer.hp -= attacker.power - t.power;
-      attacker.attackedThisTurn = true;
+    attacker.attackedThisTurn = true;
+
+    // FIRE effect: +100 effective power for this attack against a card.
+    let atkPower = attacker.power;
+    if (attacker.element === ELEMENTS.FIRE) {
+      atkPower += 100;
       next.log.push(
-        `${attacker.name} détruit ${t.name} (-${attacker.power - t.power} PV pour ${sideLabel(defenderSide)}).`
+        `Feu : ${attacker.name} gagne +100 puissance pour cette attaque (${attacker.power} → ${atkPower}).`
       );
-    } else if (attacker.power < t.power) {
+    }
+
+    if (atkPower > t.power) {
+      const overflow = atkPower - t.power;
+      const destroyed = tryDestroy(next, defenderSide, target.index);
+      if (destroyed) {
+        defenderPlayer.hp -= overflow;
+        next.log.push(
+          `${attacker.name} détruit ${t.name} (-${overflow} PV pour ${sideLabel(defenderSide)}).`
+        );
+        // ELECTRIC: on a kill, the attacker deals +100 extra HP damage.
+        if (attacker.element === ELEMENTS.ELECTRIC) {
+          defenderPlayer.hp -= 100;
+          next.log.push(`Foudre : ${attacker.name} inflige +100 PV à ${sideLabel(defenderSide)}.`);
+        }
+        // SHADOW: when it destroys a card, that card's owner loses 100 HP.
+        if (attacker.element === ELEMENTS.SHADOW) {
+          defenderPlayer.hp -= 100;
+          next.log.push(`Ombre : ${attacker.name} draine 100 PV à ${sideLabel(defenderSide)}.`);
+        }
+      }
+      // EARTH shield case: target survived -> no overflow, no on-kill bonus.
+    } else if (atkPower < t.power) {
+      const overflow = t.power - atkPower;
       const idx = findOnField(attackerPlayer, attackerInstanceId).index;
-      attackerPlayer.graveyard.push(attacker);
-      attackerPlayer.field[idx] = null;
-      attackerPlayer.hp -= t.power - attacker.power;
-      next.log.push(
-        `${t.name} repousse ${attacker.name} (-${t.power - attacker.power} PV pour ${sideLabel(attackerSide)}).`
-      );
+      const destroyed = tryDestroy(next, attackerSide, idx);
+      if (destroyed) {
+        attackerPlayer.hp -= overflow;
+        next.log.push(
+          `${t.name} repousse ${attacker.name} (-${overflow} PV pour ${sideLabel(attackerSide)}).`
+        );
+        // SHADOW (defender): the blocking card destroyed the attacker.
+        if (t.element === ELEMENTS.SHADOW) {
+          attackerPlayer.hp -= 100;
+          next.log.push(`Ombre : ${t.name} draine 100 PV à ${sideLabel(attackerSide)}.`);
+        }
+      }
+      // EARTH shield case: attacker survived -> no overflow.
     } else {
-      // equal: both destroyed, no damage
+      // equal effective power: both should be destroyed, no overflow damage.
       const idx = findOnField(attackerPlayer, attackerInstanceId).index;
-      attackerPlayer.graveyard.push(attacker);
-      attackerPlayer.field[idx] = null;
-      defenderPlayer.graveyard.push(t);
-      defenderPlayer.field[target.index] = null;
-      next.log.push(`${attacker.name} et ${t.name} se détruisent mutuellement.`);
+      const attackerDestroyed = tryDestroy(next, attackerSide, idx);
+      const targetDestroyed = tryDestroy(next, defenderSide, target.index);
+      next.log.push(`${attacker.name} et ${t.name} s'affrontent à puissance égale.`);
+      // SHADOW triggers for whichever side actually destroyed the opposing card.
+      if (attacker.element === ELEMENTS.SHADOW && targetDestroyed) {
+        defenderPlayer.hp -= 100;
+        next.log.push(`Ombre : ${attacker.name} draine 100 PV à ${sideLabel(defenderSide)}.`);
+      }
+      if (t.element === ELEMENTS.SHADOW && attackerDestroyed) {
+        attackerPlayer.hp -= 100;
+        next.log.push(`Ombre : ${t.name} draine 100 PV à ${sideLabel(attackerSide)}.`);
+      }
     }
   }
 
@@ -329,6 +417,34 @@ export function attack(state, side, attackerInstanceId, targetInstanceId = null)
   return { state: next, ok: true };
 }
 
+/**
+ * WATER effect: at the end of the turn it was summoned, each WATER card on the active side
+ * heals its owner +100 HP. Overheal ABOVE startingHp is allowed, hard-capped at
+ * config.overhealCap. Logs never say "0 PV": at the cap a distinct message is used, and any
+ * heal that ends above startingHp is flagged as "(surcharge de vie)".
+ */
+function applyWaterHeal(state, side) {
+  const player = state.players[side];
+  const baseMax = state.config.startingHp; // 2000
+  const overhealCap = state.config.overhealCap != null ? state.config.overhealCap : baseMax;
+  player.field.forEach((c) => {
+    if (c && c.element === ELEMENTS.WATER && c.summonedThisTurn) {
+      const before = player.hp;
+      player.hp = Math.min(overhealCap, player.hp + 100);
+      const healed = player.hp - before;
+      if (healed <= 0) {
+        state.log.push(
+          `Eau : ${c.name} ne soigne pas ${sideLabel(side)} (vie déjà au maximum, ${overhealCap} PV).`
+        );
+      } else if (player.hp > baseMax) {
+        state.log.push(`Eau : ${c.name} soigne ${sideLabel(side)} de ${healed} PV (surcharge de vie).`);
+      } else {
+        state.log.push(`Eau : ${c.name} soigne ${sideLabel(side)} de ${healed} PV.`);
+      }
+    }
+  });
+}
+
 export function endTurn(state, side) {
   if (state.result) return { state, ok: false, error: 'La partie est terminée.' };
   if (side !== state.activeSide) return { state, ok: false, error: "Ce n'est pas votre tour." };
@@ -336,6 +452,9 @@ export function endTurn(state, side) {
   const next = clone(state);
   next.lastError = null;
   next.log.push(`${sideLabel(side)} termine le tour ${next.turn}.`);
+
+  // WATER effect resolves at end of turn (before the turn-limit HP comparison).
+  applyWaterHeal(next, side);
 
   // Turn limit: turns are individual player turns, counter 1..maxTurns.
   if (next.turn >= next.config.maxTurns) {
