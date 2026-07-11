@@ -1155,7 +1155,13 @@ export default function LayetMultiplayer({
   });
 
   const updatePlayerAccount = (account) => {
-    const dashboard = normalizeDashboard(account);
+    const dashboard = normalizeDashboard({
+      ...account,
+      authenticated:
+        account?.authenticated === undefined
+          ? playerAccount?.authenticated
+          : account.authenticated,
+    });
     setPlayerAccountState(dashboard);
     writeStoredPlayerAccount(dashboard);
     setCanPlay(Boolean(dashboard?.authenticated && dashboard?.inventory?.length));
@@ -1191,17 +1197,22 @@ export default function LayetMultiplayer({
 
   if (mode === 'online' && session) {
     const handleMatchEnd = (summary) => {
-      if (session.mode !== MATCHMAKING_SETUP.mode) return;
-      submitRankedMatchResult(session)
-        .then((data) => {
-          if (data.dashboard) updatePlayerAccount(data.dashboard);
-        })
-        .catch(() => {
-          recordLocalMatchmakingFallback(session, summary);
-        });
+      if (session.mode === MATCHMAKING_SETUP.mode) {
+        submitRankedMatchResult(session)
+          .then((data) => {
+            if (data.dashboard) updatePlayerAccount(data.dashboard);
+          })
+          .catch(() => {
+            recordLocalMatchmakingFallback(session, summary);
+          });
+      }
       window.setTimeout(() => {
         setSession(null);
-        setMode('lobby');
+        if (onExit) {
+          onExit();
+        } else {
+          setMode('lobby');
+        }
       }, 1600);
     };
 
