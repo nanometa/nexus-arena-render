@@ -16,10 +16,14 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env'), quiet: true });
 
 const port = Number(process.env.PORT || 8000);
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3001';
+const additionalClientOrigins = (process.env.CLIENT_ORIGINS || 'https://nexusarena.pro,https://www.nexusarena.pro')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const allowedOrigins =
   process.env.NODE_ENV === 'production'
-    ? [clientOrigin]
-    : [clientOrigin, 'http://localhost:3000', 'http://localhost:3001', Origins.LOCALHOST];
+    ? [...new Set([clientOrigin, ...additionalClientOrigins])]
+    : [clientOrigin, ...additionalClientOrigins, 'http://localhost:3000', 'http://localhost:3001', Origins.LOCALHOST];
 
 const server = Server({
   games: [LayetDuelMultiplayer],
