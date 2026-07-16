@@ -1246,8 +1246,8 @@ code {
   min-height: 178px;
   overflow: hidden;
   padding: 26px clamp(28px, 5vw, 76px);
-  border-block: 1px solid rgba(245, 211, 138, 0.3);
-  background: linear-gradient(90deg, rgba(245, 211, 138, 0.07), rgba(8, 22, 48, 0.52) 42%, rgba(14, 43, 82, 0.46));
+  border-block: 0;
+  background: transparent;
 }
 
 .nexus-profile-command__frame {
