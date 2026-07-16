@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import profileFrame from '../assets/branding/nexus-profile-frame.png';
+import gameEmblem from '../assets/branding/game-emblem.png';
 import { fetchPlayerDashboard } from '../LayetGame/packApi';
-import { defaultPilotName } from '../LayetGame/genesisPackClient';
+import { defaultPilotName, shortAddress } from '../LayetGame/genesisPackClient';
+import { useWalletLogin } from '../components/web3/useWalletLogin';
 import { useNexusStore } from '../store/useNexusStore';
 import { useToastStore } from '../store/useToastStore';
 
@@ -12,9 +14,18 @@ export default function ProfilePage() {
   const playerAccount = useNexusStore((state) => state.playerAccount);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const pushToast = useToastStore((state) => state.pushToast);
+  const { connectAndSign, isPending } = useWalletLogin();
   const [leaderboard, setLeaderboard] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(
+    playerAccount?.profile?.display_name || defaultPilotName(playerAccount?.walletAddress)
+  );
   const walletAddress = playerAccount?.walletAddress;
   const authenticated = playerAccount?.authenticated;
+
+  useEffect(() => {
+    setName(playerAccount?.profile?.display_name || defaultPilotName(walletAddress));
+  }, [playerAccount?.profile?.display_name, walletAddress]);
 
   useEffect(() => {
     fetch(`${GAME_SERVER_URL}/api/leaderboard`)
@@ -30,81 +41,109 @@ export default function ProfilePage() {
       .catch((error) => pushToast({ message: error.message || 'Profile sync failed.' }));
   }, [authenticated, pushToast, setPlayerAccount, walletAddress]);
 
-  return (
-    <div className="min-h-screen bg-transparent px-4 py-6 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-[1500px]">
-        <ProfileHero account={playerAccount} />
+  const saveName = async (event) => {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (cleanName.length < 3) {
+      pushToast({ title: 'Pilot name', message: 'Use at least 3 characters.' });
+      return;
+    }
+    try {
+      await connectAndSign(cleanName.slice(0, 18));
+      setEditing(false);
+      pushToast({ title: 'Pilot profile', message: 'Pilot name saved to this wallet.' });
+    } catch (error) {
+      // The wallet hook already reports signature errors.
+    }
+  };
 
-        <div className="mt-5 grid items-start gap-8 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.55fr)]">
-          <InventoryCollection inventory={playerAccount?.inventory || []} />
-          <div className="flex min-w-0 flex-col gap-8">
-            <Leaderboard entries={leaderboard} />
-            <WalletHistory account={playerAccount} />
-          </div>
+  return (
+    <section className="nexus-profile-page">
+      <ProfileHero
+        account={playerAccount}
+        editing={editing}
+        name={name}
+        setName={setName}
+        setEditing={setEditing}
+        saveName={saveName}
+        busy={isPending}
+      />
+
+      <div className="nexus-profile-layout">
+        <InventorySummary inventory={playerAccount?.inventory || []} />
+        <div className="nexus-profile-records">
+          <Leaderboard entries={leaderboard} />
+          <WalletHistory account={playerAccount} />
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
-function ProfileHero({ account }) {
+function ProfileHero({ account, editing, name, setName, setEditing, saveName, busy }) {
   const stats = account?.stats || {};
   const inventory = account?.inventory || [];
-  const name = account?.profile?.display_name || defaultPilotName(account?.walletAddress);
 
   return (
     <motion.header
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="nexus-profile-hero"
+      className="nexus-profile-command"
     >
-      <div className="nexus-profile-identity">
-        <img src={profileFrame} alt="" className="nexus-profile-identity__frame" draggable="false" />
-        <div className="nexus-profile-identity__content relative z-10 min-w-0">
-          <h1 className="nexus-profile-identity__name truncate text-3xl font-black uppercase text-white sm:text-4xl">
-            {name}
-          </h1>
+      <img src={profileFrame} alt="" className="nexus-profile-command__frame" draggable="false" />
+      <div className="nexus-profile-command__identity">
+        <img src={gameEmblem} alt="" draggable="false" />
+        <div>
+          <p className="nexus-kicker">Pilot dossier</p>
+          {editing ? (
+            <form onSubmit={saveName} className="nexus-profile-name-form">
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={18}
+                autoFocus
+              />
+              <button type="submit" disabled={busy}>Save</button>
+              <button type="button" onClick={() => setEditing(false)}>Cancel</button>
+            </form>
+          ) : (
+            <div className="nexus-profile-command__name">
+              <h1>{account?.profile?.display_name || defaultPilotName(account?.walletAddress)}</h1>
+              <button type="button" onClick={() => setEditing(true)}>Edit name</button>
+            </div>
+          )}
+          <span>{shortAddress(account?.walletAddress)}</span>
         </div>
       </div>
 
-      <div className="nexus-profile-hero__stats relative z-10 grid grid-cols-2 gap-x-7 gap-y-4 sm:grid-cols-4">
+      <div className="nexus-profile-command__stats">
         <HeroStat label="Games" value={stats.games || 0} />
         <HeroStat label="Victories" value={stats.wins || 0} />
-        <HeroStat label="Rank Points" value={stats.points || 0} />
+        <HeroStat label="Rank points" value={stats.points || 0} />
         <HeroStat label="Collection" value={`${inventory.length}/20`} />
       </div>
     </motion.header>
   );
 }
 
-function InventoryCollection({ inventory }) {
+function InventorySummary({ inventory }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 }}
-      className="nexus-section-flow"
-    >
-      <SectionHeading eyebrow="Command deck" title="Collection" meta={`${inventory.length}/20 cards`} />
-
+    <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="nexus-profile-deck">
+      <SectionHeading eyebrow="Command deck" title="Collection" meta={`${inventory.length}/20`} />
       {inventory.length ? (
-        <div className="mt-5 grid grid-cols-5 gap-2.5 sm:gap-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div>
           {inventory.slice(0, 20).map((card, index) => (
             <motion.img
               whileHover={{ y: -6, scale: 1.04 }}
-              transition={{ duration: 0.18 }}
               key={`${card.id}-${card.copyNumber || card.copy_number || index}`}
-              className="aspect-[2/3] w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,0.58)]"
               src={card.image}
               alt={card.name}
+              draggable="false"
             />
           ))}
         </div>
       ) : (
-        <CompactEmpty
-          title="No cards revealed"
-          copy="Open your Genesis Pack to build the first command deck."
-        />
+        <CompactEmpty title="No cards revealed" copy="Open the Genesis Pack to build your command deck." />
       )}
     </motion.section>
   );
@@ -112,40 +151,23 @@ function InventoryCollection({ inventory }) {
 
 function Leaderboard({ entries }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-      className="nexus-section-flow"
-    >
+    <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="nexus-record-section">
       <SectionHeading eyebrow="Ranked multiplayer" title="Leaderboard" meta="Season 01" />
-
       {entries.length ? (
-        <ol className="mt-4 divide-y divide-white/10 border-y border-white/10">
+        <ol>
           {entries.slice(0, 10).map((entry, index) => (
-            <li
-              key={entry.walletAddress || entry.name || index}
-              className="grid grid-cols-[46px_minmax(0,1fr)_auto] items-center gap-3 py-3.5"
-            >
-              <span className="font-mono text-sm text-gold">#{String(index + 1).padStart(2, '0')}</span>
-              <div className="min-w-0">
-                <strong className="block truncate text-sm uppercase tracking-wide text-white">
-                  {entry.name || entry.displayName || defaultPilotName(entry.walletAddress)}
-                </strong>
-                <span className="text-[11px] text-slate-500">
-                  {entry.wins || 0}W · {entry.losses || 0}L · {entry.draws || 0}D
-                </span>
+            <li key={entry.walletAddress || entry.name || index}>
+              <span>#{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <strong>{entry.name || entry.displayName || defaultPilotName(entry.walletAddress)}</strong>
+                <small>{entry.wins || 0}W · {entry.losses || 0}L · {entry.draws || 0}D</small>
               </div>
-              <strong className="font-mono text-sm text-gold">{entry.points || 0} PTS</strong>
+              <b>{entry.points || 0} PTS</b>
             </li>
           ))}
         </ol>
       ) : (
-        <CompactEmpty
-          title="Season awaiting its first champion"
-          copy="Complete a ranked Multiplayer match to enter the board. Private rooms do not count."
-          index="01"
-        />
+        <CompactEmpty title="Season awaiting its first champion" copy="Complete a Ranked duel to enter the leaderboard." index="01" />
       )}
     </motion.section>
   );
@@ -153,43 +175,28 @@ function Leaderboard({ entries }) {
 
 function WalletHistory({ account }) {
   const matches = Array.isArray(account?.matches) ? account.matches : [];
-
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15 }}
-      className="nexus-section-flow"
-    >
-      <SectionHeading eyebrow="Wallet history" title="Match Log" meta={`${matches.length} recorded`} />
-
+    <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="nexus-record-section">
+      <SectionHeading eyebrow="Wallet history" title="Battle Log" meta={`${matches.length} recorded`} />
       {matches.length ? (
-        <div className="mt-4 divide-y divide-white/10 border-y border-white/10">
+        <div className="nexus-battle-log">
           {matches.slice(0, 12).map((match, index) => {
             const won = match.winner_wallet === account?.walletAddress;
+            const draw = !match.winner_wallet;
             return (
-              <article
-                key={match.match_id || match.matchId || match.id}
-                className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 py-3.5"
-              >
-                <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, '0')}</span>
-                <div className="min-w-0">
-                  <strong className="block truncate text-sm text-white">{match.match_id || match.matchId}</strong>
-                  <span className="text-[11px] text-slate-500">
-                    {match.created_at || match.completed_at || 'recent'}
-                  </span>
+              <article key={match.match_id || match.matchId || match.id}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <strong>{match.mode === 'matchmaking' ? 'Ranked Duel' : 'Private Duel'}</strong>
+                  <small>{match.match_id || match.matchId}</small>
                 </div>
-                <span className={won ? 'text-gold' : 'text-slate-400'}>{won ? 'VICTORY' : 'RESULT'}</span>
+                <b className={won ? 'is-win' : ''}>{draw ? 'DRAW' : won ? 'VICTORY' : 'DEFEAT'}</b>
               </article>
             );
           })}
         </div>
       ) : (
-        <CompactEmpty
-          title="No battle record yet"
-          copy="Your verified ranked results will appear here after the first duel."
-          index="00"
-        />
+        <CompactEmpty title="No battle record yet" copy="Verified Ranked results appear here after your first duel." />
       )}
     </motion.section>
   );
@@ -197,13 +204,10 @@ function WalletHistory({ account }) {
 
 function SectionHeading({ eyebrow, title, meta }) {
   return (
-    <div className="flex items-end justify-between gap-4 border-b border-gold/20 pb-3">
-      <div>
-        <p className="nexus-kicker">{eyebrow}</p>
-        <h2 className="mt-1 text-2xl font-black uppercase text-white sm:text-3xl">{title}</h2>
-      </div>
-      <span className="pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">{meta}</span>
-    </div>
+    <header className="nexus-section-heading">
+      <div><p className="nexus-kicker">{eyebrow}</p><h2>{title}</h2></div>
+      <span>{meta}</span>
+    </header>
   );
 }
 
@@ -211,19 +215,11 @@ function CompactEmpty({ title, copy, index = '00' }) {
   return (
     <div className="nexus-empty-state">
       <span className="nexus-empty-state__index">{index}</span>
-      <div>
-        <strong className="block text-sm uppercase tracking-[0.08em] text-white">{title}</strong>
-        <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">{copy}</p>
-      </div>
+      <div><strong>{title}</strong><p>{copy}</p></div>
     </div>
   );
 }
 
 function HeroStat({ label, value }) {
-  return (
-    <div className="border-l border-gold/30 pl-3">
-      <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</span>
-      <strong className="mt-1 block font-mono text-xl text-gold sm:text-2xl">{value}</strong>
-    </div>
-  );
+  return <div><span>{label}</span><strong>{value}</strong></div>;
 }

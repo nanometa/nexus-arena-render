@@ -1107,6 +1107,70 @@ function OnlineRoomBadge({ session, onBackToLobby }) {
   );
 }
 
+function MatchResultScreen({ session, summary, onContinue }) {
+  const [seconds, setSeconds] = useState(7);
+  const viewerWon = summary?.winner === summary?.viewerID;
+  const draw = summary?.winner === 'draw';
+  const result = draw ? 'Draw' : viewerWon ? 'Victory' : 'Defeat';
+  const resultClass = draw ? 'draw' : viewerWon ? 'victory' : 'defeat';
+  const playerPower = summary?.viewerScore?.power || 0;
+  const rivalPower = summary?.opponentScore?.power || 0;
+  const playerCards = summary?.viewerScore?.cards || 0;
+  const rivalCards = summary?.opponentScore?.cards || 0;
+
+  useEffect(() => {
+    const intervalID = window.setInterval(() => {
+      setSeconds((value) => Math.max(0, value - 1));
+    }, 1000);
+    const timeoutID = window.setTimeout(onContinue, 7000);
+    return () => {
+      window.clearInterval(intervalID);
+      window.clearTimeout(timeoutID);
+    };
+  }, [onContinue]);
+
+  return (
+    <main className={`nexus-match-result nexus-match-result--${resultClass}`}>
+      <section className="nexus-match-result__stage">
+        <div className="nexus-match-result__emblem" aria-hidden="true">
+          <span />
+          <img src={gameEmblem} alt="" draggable="false" />
+        </div>
+
+        <p className="nexus-match-result__eyebrow">
+          {session?.mode === MATCHMAKING_SETUP.mode ? 'Ranked duel complete' : 'Private duel complete'}
+        </p>
+        <h1>{result}</h1>
+        <p className="nexus-match-result__message">
+          {draw
+            ? 'Both command decks leave the Arena evenly matched.'
+            : viewerWon
+              ? 'Your command deck has claimed the Arena.'
+              : 'The rival command deck controls the field.'}
+        </p>
+
+        <div className="nexus-match-result__score">
+          <div>
+            <span>{session?.playerName || 'You'}</span>
+            <strong>{playerPower}</strong>
+            <small>{playerCards} cards controlled</small>
+          </div>
+          <b>VS</b>
+          <div>
+            <span>Rival</span>
+            <strong>{rivalPower}</strong>
+            <small>{rivalCards} cards controlled</small>
+          </div>
+        </div>
+
+        <button type="button" onClick={onContinue}>
+          Return to Hub <span>{seconds}</span>
+        </button>
+      </section>
+    </main>
+  );
+}
+
 function LocalPreviewMatch({ onBackToLobby }) {
   const [viewerID, setViewerID] = useState(PLAYER_ID);
 
@@ -1145,6 +1209,7 @@ export default function LayetMultiplayer({
   lobbyVariant = 'full',
 }) {
   const [session, setSession] = useState(null);
+  const [matchResult, setMatchResult] = useState(null);
   const [mode, setMode] = useState('lobby');
   const [playerAccount, setPlayerAccountState] = useState(
     () => normalizeDashboard(playerAccountOverride) || readStoredPlayerAccount()
@@ -1195,6 +1260,26 @@ export default function LayetMultiplayer({
     );
   }
 
+  if (mode === 'result' && session && matchResult) {
+    const returnToHub = () => {
+      setSession(null);
+      setMatchResult(null);
+      if (onExit) {
+        onExit();
+      } else {
+        setMode('lobby');
+      }
+    };
+
+    return (
+      <MatchResultScreen
+        session={session}
+        summary={matchResult}
+        onContinue={returnToHub}
+      />
+    );
+  }
+
   if (mode === 'online' && session) {
     const handleMatchEnd = (summary) => {
       if (session.mode === MATCHMAKING_SETUP.mode) {
@@ -1206,14 +1291,8 @@ export default function LayetMultiplayer({
             recordLocalMatchmakingFallback(session, summary);
           });
       }
-      window.setTimeout(() => {
-        setSession(null);
-        if (onExit) {
-          onExit();
-        } else {
-          setMode('lobby');
-        }
-      }, 1600);
+      setMatchResult(summary);
+      window.setTimeout(() => setMode('result'), 900);
     };
 
     return (

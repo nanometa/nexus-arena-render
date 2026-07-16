@@ -259,10 +259,10 @@ export default function GenesisDrop() {
               Genesis Drop
             </p>
             <h2 className="mt-2 text-2xl font-black uppercase leading-tight text-white">
-              Mint. Burn. Deploy.
+              Genesis Pack
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              One pack per wallet. Open it to burn the pack and load your 20-card command deck.
+              One pack per wallet. Open it to reveal a balanced twenty-card command deck.
             </p>
           </div>
         </div>
@@ -287,7 +287,7 @@ export default function GenesisDrop() {
             to="/arena"
             className="block rounded-sm border border-gold/60 bg-gold px-4 py-3 text-center text-sm font-black uppercase tracking-[0.18em] text-slate-950 transition hover:bg-white"
           >
-            &gt;_ Play
+            Enter Arena
           </Link>
         </motion.div>
       </div>

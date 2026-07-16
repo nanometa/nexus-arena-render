@@ -449,3 +449,1278 @@ code {
     color: rgba(226, 232, 240, 0.76) !important;
   }
 }
+
+/* Nexus game client shell -------------------------------------------------- */
+:root {
+  --nexus-ink: #030711;
+  --nexus-navy: #071126;
+  --nexus-blue: #102a51;
+  --nexus-cyan: #44c7ff;
+  --nexus-gold: #f5d38a;
+  --nexus-text: #f6f8ff;
+  --nexus-muted: #93a4bd;
+}
+
+.nexus-client-shell {
+  position: relative;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  color: var(--nexus-text);
+  background: var(--nexus-ink);
+  isolation: isolate;
+}
+
+.nexus-client-shell::before,
+.nexus-client-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.nexus-client-shell::before {
+  background:
+    linear-gradient(180deg, rgba(3, 7, 17, 0.24), rgba(3, 7, 17, 0.76)),
+    var(--nexus-route-background) center / cover no-repeat;
+  filter: saturate(0.9) contrast(1.04);
+}
+
+.nexus-client-shell::after {
+  z-index: -1;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(68, 199, 255, 0.1), transparent 34%),
+    linear-gradient(90deg, rgba(3, 7, 17, 0.78), transparent 20%, transparent 80%, rgba(3, 7, 17, 0.78));
+}
+
+.nexus-client-bar {
+  position: sticky;
+  z-index: 70;
+  top: 0;
+  display: grid;
+  grid-template-columns: 190px minmax(360px, 1fr) 290px;
+  align-items: center;
+  min-height: 74px;
+  padding: 0 clamp(20px, 3vw, 54px);
+  border-bottom: 1px solid rgba(124, 171, 224, 0.22);
+  background: rgba(3, 7, 17, 0.84);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.nexus-client-bar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(68, 199, 255, 0.54), rgba(245, 211, 138, 0.4), transparent);
+  opacity: 0.56;
+}
+
+.nexus-client-brand {
+  display: inline-flex;
+  align-items: center;
+  width: 156px;
+}
+
+.nexus-client-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.nexus-client-nav {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  height: 74px;
+}
+
+.nexus-client-nav__item {
+  position: relative;
+  display: flex;
+  min-width: 116px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: rgba(203, 213, 225, 0.72);
+  text-decoration: none;
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.nexus-client-nav__item::after {
+  content: '';
+  position: absolute;
+  right: 22px;
+  bottom: 0;
+  left: 22px;
+  height: 2px;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, var(--nexus-cyan), var(--nexus-gold));
+  box-shadow: 0 0 18px rgba(68, 199, 255, 0.48);
+  transition: transform 180ms ease;
+}
+
+.nexus-client-nav__item span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.nexus-client-nav__item small {
+  color: rgba(122, 143, 174, 0.62);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.nexus-client-nav__item:hover,
+.nexus-client-nav__item.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, transparent, rgba(68, 199, 255, 0.07));
+}
+
+.nexus-client-nav__item.is-active::after {
+  transform: scaleX(1);
+}
+
+.nexus-client-pilot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.nexus-client-pilot__copy {
+  display: grid;
+  min-width: 0;
+  text-align: right;
+}
+
+.nexus-client-pilot__copy strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nexus-client-pilot__copy span,
+.nexus-client-pilot__deck span {
+  color: var(--nexus-muted);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 10px;
+}
+
+.nexus-client-pilot__deck {
+  display: flex;
+  align-items: baseline;
+  padding-left: 14px;
+  border-left: 1px solid rgba(124, 171, 224, 0.24);
+}
+
+.nexus-client-pilot__deck strong {
+  color: var(--nexus-gold);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 18px;
+}
+
+.nexus-client-pilot > button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(124, 171, 224, 0.28);
+  border-radius: 4px;
+  color: rgba(226, 232, 240, 0.8);
+  background: rgba(8, 19, 38, 0.64);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
+}
+
+.nexus-client-pilot > button:hover {
+  border-color: rgba(245, 211, 138, 0.54);
+  color: #fff;
+  background: rgba(245, 211, 138, 0.08);
+}
+
+.nexus-client-stage {
+  position: relative;
+  min-height: calc(100dvh - 74px);
+}
+
+.nexus-client-nav--mobile {
+  display: none;
+}
+
+/* Hub ---------------------------------------------------------------------- */
+.nexus-hub-page {
+  width: min(1540px, 100%);
+  margin: 0 auto;
+  padding: 0 clamp(24px, 4vw, 68px) 56px;
+}
+
+.nexus-hub-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: center;
+  gap: clamp(40px, 8vw, 140px);
+  min-height: clamp(390px, 55vh, 590px);
+  overflow: hidden;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.23);
+}
+
+.nexus-hub-hero::after {
+  content: '';
+  position: absolute;
+  right: -10%;
+  bottom: -180px;
+  width: 620px;
+  height: 620px;
+  border: 1px solid rgba(68, 199, 255, 0.1);
+  border-radius: 50%;
+  box-shadow: inset 0 0 80px rgba(64, 88, 255, 0.08);
+}
+
+.nexus-hub-hero__sigil {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 36%;
+  width: min(620px, 52vw);
+  transform: translate(-50%, -50%);
+  opacity: 0.11;
+  filter: drop-shadow(0 0 70px rgba(68, 199, 255, 0.3));
+}
+
+.nexus-hub-hero__copy {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+}
+
+.nexus-hub-hero__copy > img {
+  width: clamp(250px, 30vw, 430px);
+  margin: 22px 0 18px;
+}
+
+.nexus-hub-hero__copy h1 {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 48px);
+  line-height: 1.04;
+  letter-spacing: 0;
+}
+
+.nexus-hub-hero__copy > p:last-of-type {
+  max-width: 650px;
+  margin: 18px 0 0;
+  color: #a9b7ca;
+  font-size: clamp(14px, 1.1vw, 17px);
+  line-height: 1.75;
+}
+
+.nexus-hub-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.nexus-hub-hero__actions a,
+.nexus-collection-empty a,
+.nexus-card-inspector__copy > a {
+  display: inline-flex;
+  min-width: 160px;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
+  border: 1px solid rgba(124, 171, 224, 0.35);
+  border-radius: 4px;
+  color: #e8eff9;
+  background: rgba(7, 17, 38, 0.7);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.nexus-hub-hero__actions a:hover,
+.nexus-collection-empty a:hover,
+.nexus-card-inspector__copy > a:hover {
+  transform: translateY(-2px);
+  border-color: var(--nexus-cyan);
+  box-shadow: 0 10px 30px rgba(30, 117, 196, 0.18);
+}
+
+.nexus-hub-hero__actions a.is-primary {
+  border-color: rgba(245, 211, 138, 0.72);
+  color: #101520;
+  background: linear-gradient(135deg, #e3b962, #ffe1a0);
+  box-shadow: 0 14px 36px rgba(224, 170, 66, 0.18);
+}
+
+.nexus-hub-hero__deck {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.nexus-hub-hero__deck img {
+  width: 158px;
+  height: 158px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 30px rgba(68, 199, 255, 0.25));
+}
+
+.nexus-hub-hero__deck span,
+.nexus-hub-hero__deck small {
+  color: var(--nexus-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.nexus-hub-hero__deck strong {
+  margin: 5px 0 2px;
+  color: #fff;
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.nexus-hub-hero__deck small {
+  color: var(--nexus-gold);
+}
+
+.nexus-hub-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(124, 171, 224, 0.18);
+}
+
+.nexus-hub-stats > div {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.nexus-hub-stats > div + div {
+  border-left: 1px solid rgba(124, 171, 224, 0.16);
+}
+
+.nexus-hub-stats span {
+  color: var(--nexus-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.nexus-hub-stats strong {
+  color: var(--nexus-gold);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 24px;
+}
+
+.nexus-hub-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: clamp(30px, 5vw, 72px);
+  padding-top: 46px;
+}
+
+.nexus-hub-deck-preview header,
+.nexus-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.2);
+}
+
+.nexus-hub-deck-preview h2,
+.nexus-section-heading h2 {
+  margin: 5px 0 0;
+  font-size: clamp(24px, 2.1vw, 34px);
+  line-height: 1;
+}
+
+.nexus-hub-deck-preview header > a,
+.nexus-section-heading > span {
+  color: #a9b7ca;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.nexus-hub-deck-preview header > a:hover {
+  color: var(--nexus-cyan);
+}
+
+.nexus-hub-card-line {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(72px, 1fr));
+  align-items: end;
+  gap: clamp(6px, 0.8vw, 12px);
+  padding: 30px 0 18px;
+  perspective: 1000px;
+}
+
+.nexus-hub-card-line img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 0.7;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.58));
+}
+
+.nexus-hub-drop {
+  position: relative;
+  padding-left: 28px;
+  border-left: 1px solid rgba(245, 211, 138, 0.24);
+}
+
+.nexus-hub-drop::before {
+  content: '';
+  position: absolute;
+  top: 30px;
+  bottom: 30px;
+  left: -1px;
+  width: 1px;
+  background: linear-gradient(transparent, var(--nexus-gold), var(--nexus-cyan), transparent);
+  opacity: 0.48;
+}
+
+.nexus-hub-drop .nexus-genesis-drop::before {
+  display: none;
+}
+
+/* Collection --------------------------------------------------------------- */
+.nexus-collection-page,
+.nexus-profile-page {
+  width: min(1540px, 100%);
+  margin: 0 auto;
+  padding: 0 clamp(24px, 4vw, 68px) 70px;
+}
+
+.nexus-page-intro {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 36px;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.22);
+}
+
+.nexus-page-intro h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(42px, 5vw, 76px);
+  line-height: 0.96;
+}
+
+.nexus-page-intro > div:first-child > p:last-child {
+  max-width: 640px;
+  margin: 0;
+  color: #a5b4c8;
+  line-height: 1.7;
+}
+
+.nexus-page-intro__status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: clamp(0px, 3vw, 34px);
+}
+
+.nexus-page-intro__status img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 24px rgba(68, 199, 255, 0.2));
+}
+
+.nexus-page-intro__status div {
+  display: grid;
+}
+
+.nexus-page-intro__status strong {
+  color: #fff;
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 30px;
+}
+
+.nexus-page-intro__status span {
+  color: var(--nexus-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nexus-collection-toolbar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  padding: 24px 0 20px;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.16);
+}
+
+.nexus-filter-group {
+  display: grid;
+  gap: 8px;
+}
+
+.nexus-filter-group > span,
+.nexus-collection-toolbar__count {
+  color: var(--nexus-muted);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.nexus-filter-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nexus-filter-group button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(124, 171, 224, 0.22);
+  border-radius: 3px;
+  color: #9fafc4;
+  background: rgba(7, 17, 38, 0.54);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nexus-filter-group button:hover,
+.nexus-filter-group button.is-active {
+  border-color: rgba(68, 199, 255, 0.66);
+  color: #fff;
+  background: rgba(22, 99, 166, 0.25);
+  box-shadow: inset 0 -2px 0 rgba(68, 199, 255, 0.65);
+}
+
+.nexus-collection-toolbar__count {
+  margin-left: auto;
+  padding-bottom: 8px;
+  color: var(--nexus-gold);
+}
+
+.nexus-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: clamp(14px, 1.5vw, 24px);
+  padding-top: 30px;
+}
+
+.nexus-collection-card {
+  position: relative;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nexus-collection-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 0.7;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.62));
+}
+
+.nexus-collection-card__shine {
+  position: absolute;
+  inset: 3% 7%;
+  pointer-events: none;
+  background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.2) 46%, transparent 58%);
+  opacity: 0;
+  transform: translateX(-40%);
+  transition: opacity 180ms ease, transform 350ms ease;
+}
+
+.nexus-collection-card:hover .nexus-collection-card__shine {
+  opacity: 0.6;
+  transform: translateX(40%);
+}
+
+.nexus-collection-empty {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 480px);
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  min-height: 520px;
+}
+
+.nexus-collection-empty > img {
+  width: 100%;
+  filter: drop-shadow(0 22px 34px rgba(0, 0, 0, 0.72));
+}
+
+.nexus-collection-empty h2 {
+  margin: 10px 0;
+  font-size: 36px;
+}
+
+.nexus-collection-empty p:not(.nexus-kicker) {
+  margin: 0 0 24px;
+  color: var(--nexus-muted);
+  line-height: 1.7;
+}
+
+.nexus-card-inspector {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1, 4, 12, 0.88);
+  backdrop-filter: blur(18px);
+}
+
+.nexus-card-inspector > section {
+  display: grid;
+  grid-template-columns: minmax(240px, 380px) minmax(300px, 430px);
+  align-items: center;
+  gap: clamp(34px, 6vw, 84px);
+  width: min(940px, 100%);
+}
+
+.nexus-card-inspector__art img {
+  display: block;
+  width: 100%;
+  max-height: 78dvh;
+  object-fit: contain;
+  filter: drop-shadow(0 30px 58px rgba(0, 0, 0, 0.82));
+}
+
+.nexus-card-inspector__copy {
+  position: relative;
+  padding: 36px 0;
+  border-block: 1px solid rgba(124, 171, 224, 0.2);
+}
+
+.nexus-card-inspector__copy > button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: 0;
+  color: var(--nexus-muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nexus-card-inspector__copy h2 {
+  margin: 10px 0 26px;
+  font-size: clamp(34px, 4vw, 58px);
+  line-height: 1;
+}
+
+.nexus-card-inspector__copy dl {
+  margin: 0 0 30px;
+}
+
+.nexus-card-inspector__copy dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.14);
+}
+
+.nexus-card-inspector__copy dt {
+  color: var(--nexus-muted);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nexus-card-inspector__copy dd {
+  margin: 0;
+  color: #fff;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+/* Profile ------------------------------------------------------------------ */
+.nexus-profile-page {
+  padding-top: 38px;
+}
+
+.nexus-profile-command {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) auto;
+  align-items: center;
+  min-height: 178px;
+  overflow: hidden;
+  padding: 26px clamp(28px, 5vw, 76px);
+  border-block: 1px solid rgba(245, 211, 138, 0.3);
+  background: linear-gradient(90deg, rgba(245, 211, 138, 0.07), rgba(8, 22, 48, 0.52) 42%, rgba(14, 43, 82, 0.46));
+}
+
+.nexus-profile-command__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.nexus-profile-command__identity,
+.nexus-profile-command__stats {
+  position: relative;
+  z-index: 1;
+}
+
+.nexus-profile-command__identity {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.nexus-profile-command__identity > img {
+  width: 82px;
+  height: 82px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(68, 199, 255, 0.2));
+}
+
+.nexus-profile-command__identity h1 {
+  margin: 4px 0 2px;
+  font-size: clamp(34px, 4vw, 58px);
+  line-height: 1;
+}
+
+.nexus-profile-command__identity > div > span {
+  color: #9fb0c7;
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 11px;
+}
+
+.nexus-profile-command__name {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nexus-profile-command__name button,
+.nexus-profile-name-form button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(124, 171, 224, 0.26);
+  border-radius: 3px;
+  color: #b7c4d6;
+  background: rgba(3, 7, 17, 0.46);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nexus-profile-name-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0;
+}
+
+.nexus-profile-name-form input {
+  width: min(280px, 100%);
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(68, 199, 255, 0.45);
+  border-radius: 3px;
+  outline: 0;
+  color: #fff;
+  background: rgba(3, 7, 17, 0.76);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.nexus-profile-command__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+}
+
+.nexus-profile-command__stats > div {
+  display: grid;
+  gap: 6px;
+  min-width: 110px;
+  padding: 8px 20px;
+  border-left: 1px solid rgba(124, 171, 224, 0.22);
+}
+
+.nexus-profile-command__stats span {
+  color: var(--nexus-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nexus-profile-command__stats strong {
+  color: var(--nexus-gold);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 22px;
+}
+
+.nexus-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.42fr) minmax(520px, 1fr);
+  gap: clamp(36px, 5vw, 76px);
+  padding-top: 40px;
+}
+
+.nexus-profile-deck > div {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(48px, 1fr));
+  gap: 8px;
+  padding-top: 18px;
+}
+
+.nexus-profile-deck > div > img {
+  display: block;
+  width: 100%;
+  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.58));
+}
+
+.nexus-profile-records {
+  display: grid;
+  align-content: start;
+  gap: 44px;
+}
+
+.nexus-record-section ol,
+.nexus-battle-log {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nexus-record-section li,
+.nexus-battle-log article {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(124, 171, 224, 0.14);
+}
+
+.nexus-record-section li > span,
+.nexus-battle-log article > span {
+  color: rgba(245, 211, 138, 0.48);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.nexus-record-section li > div,
+.nexus-battle-log article > div {
+  display: grid;
+  min-width: 0;
+}
+
+.nexus-record-section li strong,
+.nexus-battle-log article strong {
+  overflow: hidden;
+  color: #eff4fb;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nexus-record-section li small,
+.nexus-battle-log article small {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--nexus-muted);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexus-record-section li > b,
+.nexus-battle-log article > b {
+  color: #c5d2e2;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.nexus-battle-log article > b.is-win {
+  color: var(--nexus-gold);
+}
+
+.nexus-empty-state {
+  min-height: 104px;
+  border-block-color: rgba(124, 171, 224, 0.14);
+  background: linear-gradient(90deg, rgba(14, 42, 80, 0.25), transparent);
+}
+
+.nexus-empty-state strong {
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.nexus-empty-state p {
+  margin: 6px 0 0;
+  color: var(--nexus-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1120px) {
+  .nexus-client-bar {
+    grid-template-columns: 150px minmax(330px, 1fr) 230px;
+    padding-inline: 20px;
+  }
+
+  .nexus-client-brand {
+    width: 130px;
+  }
+
+  .nexus-client-nav__item {
+    min-width: 94px;
+  }
+
+  .nexus-client-pilot__copy span {
+    display: none;
+  }
+
+  .nexus-hub-content {
+    grid-template-columns: 1fr 300px;
+  }
+
+  .nexus-profile-command {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .nexus-profile-command__stats {
+    width: 100%;
+  }
+
+  .nexus-profile-command__stats > div:first-child {
+    border-left: 0;
+  }
+
+  .nexus-profile-layout {
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: 34px;
+  }
+}
+
+@media (max-width: 800px) {
+  .nexus-client-bar {
+    position: sticky;
+    grid-template-columns: minmax(110px, 1fr) auto;
+    min-height: 62px;
+    padding-inline: 16px;
+  }
+
+  .nexus-client-brand {
+    width: 118px;
+  }
+
+  .nexus-client-nav--desktop,
+  .nexus-client-pilot__copy,
+  .nexus-client-pilot > button {
+    display: none;
+  }
+
+  .nexus-client-pilot__deck {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .nexus-client-nav--mobile {
+    position: fixed;
+    z-index: 90;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: 64px;
+    border-top: 1px solid rgba(124, 171, 224, 0.26);
+    background: rgba(3, 7, 17, 0.94);
+    backdrop-filter: blur(16px);
+  }
+
+  .nexus-client-nav--mobile .nexus-client-nav__item {
+    min-width: 0;
+    height: 64px;
+  }
+
+  .nexus-client-nav__item small {
+    display: none;
+  }
+
+  .nexus-client-stage {
+    min-height: calc(100dvh - 62px);
+    padding-bottom: 64px;
+  }
+
+  .nexus-hub-page,
+  .nexus-collection-page,
+  .nexus-profile-page {
+    padding-inline: 18px;
+    padding-bottom: 92px;
+  }
+
+  .nexus-hub-hero {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    min-height: auto;
+    padding: 62px 0 38px;
+  }
+
+  .nexus-hub-hero__copy > img {
+    width: min(330px, 78vw);
+  }
+
+  .nexus-hub-hero__deck {
+    grid-template-columns: 92px auto;
+    justify-content: start;
+    justify-items: start;
+    column-gap: 14px;
+    text-align: left;
+  }
+
+  .nexus-hub-hero__deck img {
+    grid-row: 1 / 5;
+    width: 92px;
+    height: 92px;
+  }
+
+  .nexus-hub-hero__deck strong {
+    font-size: 30px;
+  }
+
+  .nexus-hub-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .nexus-hub-stats > div {
+    min-height: 68px;
+  }
+
+  .nexus-hub-stats > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid rgba(124, 171, 224, 0.16);
+  }
+
+  .nexus-hub-stats > div:nth-child(4) {
+    border-top: 1px solid rgba(124, 171, 224, 0.16);
+  }
+
+  .nexus-hub-content {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .nexus-hub-card-line {
+    grid-template-columns: repeat(7, minmax(58px, 1fr));
+    overflow-x: auto;
+  }
+
+  .nexus-hub-card-line img {
+    min-width: 82px;
+  }
+
+  .nexus-hub-drop {
+    padding: 28px 0 0;
+    border-top: 1px solid rgba(245, 211, 138, 0.24);
+    border-left: 0;
+  }
+
+  .nexus-hub-drop::before {
+    display: none;
+  }
+
+  .nexus-page-intro {
+    min-height: 190px;
+  }
+
+  .nexus-page-intro__status {
+    display: none;
+  }
+
+  .nexus-collection-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .nexus-collection-toolbar__count {
+    margin-left: 0;
+  }
+
+  .nexus-collection-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .nexus-card-inspector > section {
+    grid-template-columns: minmax(150px, 240px) minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .nexus-profile-command {
+    grid-template-columns: 1fr;
+    padding: 24px 20px;
+  }
+
+  .nexus-profile-command__identity > img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .nexus-profile-command__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .nexus-profile-command__stats > div {
+    min-width: 0;
+    padding: 10px 14px;
+  }
+
+  .nexus-profile-command__stats > div:nth-child(3) {
+    border-top: 1px solid rgba(124, 171, 224, 0.18);
+    border-left: 0;
+  }
+
+  .nexus-profile-command__stats > div:nth-child(4) {
+    border-top: 1px solid rgba(124, 171, 224, 0.18);
+  }
+
+  .nexus-profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .nexus-hub-hero__actions a {
+    width: 100%;
+  }
+
+  .nexus-hub-card-line {
+    margin-right: -18px;
+  }
+
+  .nexus-page-intro h1 {
+    font-size: 44px;
+  }
+
+  .nexus-filter-group > div {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .nexus-filter-group button {
+    overflow: hidden;
+    padding-inline: 5px;
+    font-size: 8px;
+    text-overflow: ellipsis;
+  }
+
+  .nexus-collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nexus-collection-empty {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .nexus-collection-empty h2 {
+    font-size: 24px;
+  }
+
+  .nexus-card-inspector {
+    overflow-y: auto;
+    place-items: start center;
+  }
+
+  .nexus-card-inspector > section {
+    grid-template-columns: 1fr;
+    width: min(320px, 100%);
+  }
+
+  .nexus-card-inspector__art img {
+    max-height: 56dvh;
+  }
+
+  .nexus-card-inspector__copy {
+    width: 100%;
+  }
+
+  .nexus-profile-command__identity {
+    align-items: flex-start;
+  }
+
+  .nexus-profile-command__identity h1 {
+    font-size: 32px;
+  }
+
+  .nexus-profile-command__name {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nexus-profile-deck > div {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .nexus-record-section li,
+  .nexus-battle-log article {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+}
