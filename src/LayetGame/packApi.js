@@ -1,5 +1,17 @@
 const GAME_SERVER_URL = process.env.REACT_APP_GAME_SERVER_URL || 'http://localhost:8000';
 
+let serverWarmupPromise = null;
+
+export function warmGameServer() {
+  if (!serverWarmupPromise) {
+    serverWarmupPromise = fetch(`${GAME_SERVER_URL}/health`, {
+      cache: 'no-store',
+    }).catch(() => null);
+  }
+
+  return serverWarmupPromise;
+}
+
 async function readResponse(response) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

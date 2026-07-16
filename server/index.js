@@ -43,6 +43,7 @@ server.app.use(createPlayerApi({ allowedOrigins }));
 
 server.app.use(async (ctx, next) => {
   if (ctx.path === '/health') {
+    ctx.set('Access-Control-Allow-Origin', '*');
     ctx.body = {
       ok: true,
       game: LayetDuelMultiplayer.name,

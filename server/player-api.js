@@ -65,6 +65,23 @@ function walletFromValue(value) {
   return normalized;
 }
 
+function defaultPilotName(walletAddress) {
+  const suffix = String(walletAddress || '').replace(/^0x/i, '').slice(-4).toUpperCase();
+  return suffix ? `Pilot ${suffix}` : 'Pilot';
+}
+
+function cleanDisplayName(value) {
+  return String(value || '').trim().slice(0, 18);
+}
+
+function resolvePlayerDisplayName(walletAddress, requestedName, existingProfile) {
+  return (
+    cleanDisplayName(requestedName) ||
+    cleanDisplayName(existingProfile?.display_name) ||
+    defaultPilotName(walletAddress)
+  );
+}
+
 function getMessageField(message, field) {
   const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(message || '').match(new RegExp(`^${escaped}:\\s*(.+?)\\s*$`, 'im'));
@@ -159,9 +176,13 @@ async function getMatchHistory(walletAddress) {
   }
 }
 
-async function buildPlayerDashboard(walletAddress) {
+async function buildPlayerDashboard(walletAddress, profileOverride = undefined) {
+  const profileRequest =
+    profileOverride === undefined
+      ? getPlayer(walletAddress).catch(() => null)
+      : Promise.resolve(profileOverride);
   const [profile, packs, inventory, leaderboardEntry, matches] = await Promise.all([
-    getPlayer(walletAddress).catch(() => null),
+    profileRequest,
     getPacks(walletAddress).catch(() => []),
     getInventory(walletAddress).catch(() => []),
     getLeaderboardEntry(walletAddress).catch(() => null),
@@ -205,10 +226,22 @@ function createPlayerApi({ allowedOrigins }) {
           message: body.message,
           signature: body.signature,
         });
-        const displayName = String(body.displayName || '').trim() || 'Player';
-        await savePlayer(walletAddress, displayName);
+        const requestedDisplayName = cleanDisplayName(body.displayName);
+        const existingProfile = await getPlayer(walletAddress);
+        const displayName = resolvePlayerDisplayName(
+          walletAddress,
+          requestedDisplayName,
+          existingProfile
+        );
+        const shouldSaveProfile =
+          !existingProfile ||
+          Boolean(requestedDisplayName) ||
+          !cleanDisplayName(existingProfile.display_name);
+        const profile = shouldSaveProfile
+          ? await savePlayer(walletAddress, displayName)
+          : existingProfile;
         ctx.body = {
-          ...(await buildPlayerDashboard(walletAddress)),
+          ...(await buildPlayerDashboard(walletAddress, profile)),
           authenticated: true,
         };
         return;
@@ -237,6 +270,8 @@ function createPlayerApi({ allowedOrigins }) {
 
 module.exports = {
   buildPlayerDashboard,
+  cleanDisplayName,
   createPlayerApi,
+  resolvePlayerDisplayName,
   verifyWalletSignature,
 };

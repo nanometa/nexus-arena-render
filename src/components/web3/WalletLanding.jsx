@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import connectWalletLabel from '../../assets/branding/connect-wallet-label.svg';
 import connectingWalletLabel from '../../assets/branding/connecting-wallet-label.svg';
@@ -6,11 +6,16 @@ import nexusArenaWordmark from '../../assets/branding/nexus-arena-wordmark.svg';
 import nexusPanelAura from '../../assets/branding/nexus-panel-aura.svg';
 import nexusSigil from '../../assets/branding/nexus-ui-sigil.svg';
 import landingBackground from '../../assets/backgrounds/nexus-landing-v1.png';
+import { warmGameServer } from '../../LayetGame/packApi';
 import { useWalletLogin } from './useWalletLogin';
 
 export default function WalletLanding() {
   const { connectAndSign, isPending } = useWalletLogin();
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void warmGameServer();
+  }, []);
 
   const handleConnect = async () => {
     setBusy(true);

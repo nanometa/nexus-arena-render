@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { isAddress } from 'viem';
 import { useAccount, useConnect, useSignMessage, useSwitchChain } from 'wagmi';
 import {
@@ -7,7 +8,7 @@ import {
   hasWalletProvider,
   walletErrorMessage,
 } from '../../LayetGame/genesisPackClient';
-import { createPlayerSession } from '../../LayetGame/packApi';
+import { createPlayerSession, warmGameServer } from '../../LayetGame/packApi';
 import { useNexusStore } from '../../store/useNexusStore';
 import { useToastStore } from '../../store/useToastStore';
 
@@ -21,10 +22,14 @@ export function useWalletLogin() {
   const { connectAsync, connectors, isPending } = useConnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChainAsync } = useSwitchChain();
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const pushToast = useToastStore((state) => state.pushToast);
 
   const connectAndSign = async (displayName = '') => {
+    setIsAuthenticating(true);
+    const serverReady = warmGameServer();
+
     try {
       if (!hasWalletProvider()) {
         throw new Error('Install MetaMask or another EVM wallet.');
@@ -46,19 +51,17 @@ export function useWalletLogin() {
         throw new Error('Wallet address unavailable.');
       }
 
-      const requestedName = String(displayName || '').trim();
-      const resolvedDisplayName =
-        requestedName && requestedName.toLowerCase() !== 'pilot'
-          ? requestedName
-          : defaultPilotName(walletAddress);
+      const requestedName = String(displayName || '').trim().slice(0, 18);
+      const resolvedDisplayName = requestedName || defaultPilotName(walletAddress);
       const message = createWalletLoginMessage({
         walletAddress,
         displayName: resolvedDisplayName,
       });
       const signature = await signMessageAsync({ message, account: walletAddress });
+      await serverReady;
       const dashboard = await createPlayerSession({
         walletAddress,
-        displayName: resolvedDisplayName,
+        displayName: requestedName,
         message,
         signature,
       });
@@ -74,11 +77,13 @@ export function useWalletLogin() {
         message,
       });
       throw error;
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
   return {
     connectAndSign,
-    isPending,
+    isPending: isPending || isAuthenticating,
   };
 }
