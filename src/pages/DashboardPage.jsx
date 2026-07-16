@@ -1,22 +1,44 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import GenesisDrop from '../components/web3/GenesisDrop';
 import gameEmblem from '../assets/branding/game-emblem.png';
 import nexusArenaWordmark from '../assets/branding/nexus-arena-wordmark.svg';
 import nexusSigil from '../assets/branding/nexus-ui-sigil.svg';
+import { CARD_CATALOG } from '../LayetGame/cards.generated';
 import { defaultPilotName } from '../LayetGame/genesisPackClient';
 import { useNexusStore } from '../store/useNexusStore';
 
-const CARD_BACK = '/assets/cards/backs/card-back-standard.png';
+const ELEMENTS = ['all', 'fire', 'water', 'earth', 'nature', 'shadow', 'electric'];
+const RARITIES = ['all', 'common', 'rare', 'epic', 'legendary'];
+
+function rarityFromTier(tier) {
+  if (tier === '300-390' || tier === '400-490') return 'common';
+  if (tier === '500-590') return 'rare';
+  if (tier === '600-680') return 'epic';
+  return 'legendary';
+}
 
 export default function DashboardPage() {
   const playerAccount = useNexusStore((state) => state.playerAccount);
+  const [element, setElement] = useState('all');
+  const [rarity, setRarity] = useState('all');
   const inventory = useMemo(
     () => (Array.isArray(playerAccount?.inventory) ? playerAccount.inventory : []),
     [playerAccount?.inventory]
   );
-  const featuredCards = inventory.slice(0, 7);
+  const codexCards = useMemo(
+    () => CARD_CATALOG.map((card) => ({ ...card, rarity: rarityFromTier(card.tier) })),
+    []
+  );
+  const filteredCodex = useMemo(
+    () => codexCards.filter(
+      (card) =>
+        (element === 'all' || card.element === element) &&
+        (rarity === 'all' || card.rarity === rarity)
+    ),
+    [codexCards, element, rarity]
+  );
   const pilotName =
     playerAccount?.profile?.display_name || defaultPilotName(playerAccount?.walletAddress);
   const stats = playerAccount?.stats || {};
@@ -58,28 +80,31 @@ export default function DashboardPage() {
         <section className="nexus-hub-deck-preview">
           <header>
             <div>
-              <p className="nexus-kicker">Command deck</p>
-              <h2>Your formation</h2>
+              <p className="nexus-kicker">Complete card archive</p>
+              <h2>Nexus Codex</h2>
             </div>
-            <Link to="/collection">Open collection</Link>
+            <Link to="/collection">My collection</Link>
           </header>
 
-          <div className="nexus-hub-card-line">
-            {Array.from({ length: 7 }, (_, index) => {
-              const card = featuredCards[index];
-              return (
-                <motion.img
-                  key={card?.id || `sealed-${index}`}
-                  src={card?.image || CARD_BACK}
-                  alt={card?.name || 'Sealed Nexus card'}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.045 }}
-                  whileHover={{ y: -12, scale: 1.045 }}
-                  draggable="false"
-                />
-              );
-            })}
+          <div className="nexus-hub-codex-toolbar">
+            <CodexFilter label="Element" values={ELEMENTS} value={element} onChange={setElement} />
+            <CodexFilter label="Rarity" values={RARITIES} value={rarity} onChange={setRarity} />
+            <strong>{filteredCodex.length}/{codexCards.length}</strong>
+          </div>
+
+          <div className="nexus-hub-codex-grid" aria-label="Complete Nexus card catalog">
+            {filteredCodex.map((card, index) => (
+              <motion.figure
+                key={card.id}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index, 18) * 0.025 }}
+                whileHover={{ y: -7, scale: 1.025 }}
+                title={`${card.name} - ${card.element} - ${card.rarity}`}
+              >
+                <img src={card.image} alt={card.name} draggable="false" />
+              </motion.figure>
+            ))}
           </div>
         </section>
 
@@ -96,6 +121,26 @@ function HubStat({ label, value }) {
     <div>
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function CodexFilter({ label, values, value, onChange }) {
+  return (
+    <div className="nexus-filter-group">
+      <span>{label}</span>
+      <div>
+        {values.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={option === value ? 'is-active' : ''}
+            onClick={() => onChange(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
