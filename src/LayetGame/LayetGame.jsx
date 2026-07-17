@@ -13,7 +13,7 @@ import {
 } from './game';
 import './LayetGame.css';
 
-const CARD_BACK = '/assets/cards/backs/card-back-standard.png';
+const CARD_BACK = '/assets/cards/backs/card-back-deck-thumbnail.png';
 const GAME_TITLE = 'NEXUS ARENA';
 const SFX_DATA_URI =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';

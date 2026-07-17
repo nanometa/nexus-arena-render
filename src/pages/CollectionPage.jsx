@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import gameEmblem from '../assets/branding/game-emblem.png';
 import { useNexusStore } from '../store/useNexusStore';
 
-const CARD_BACK = '/assets/cards/backs/card-back-standard.png';
+const CARD_BACK = '/assets/cards/backs/card-back-deck-thumbnail.png';
 const ELEMENTS = ['all', 'fire', 'water', 'earth', 'nature', 'shadow', 'electric'];
 const RARITIES = ['all', 'common', 'rare', 'epic', 'legendary'];
 
