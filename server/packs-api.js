@@ -152,9 +152,21 @@ function byCreatedAtDesc(a, b) {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''));
 }
 
-async function ensurePlayer(walletAddress, displayName) {
+async function ensurePlayer(walletAddress, displayName, options = {}) {
   const status = getSupabaseStatus();
   if (!status.enabled) return null;
+
+  const overwriteDisplayName = options.overwriteDisplayName === true;
+  if (!overwriteDisplayName) {
+    const existingPlayers = await supabaseRest(
+      `players?wallet_address=eq.${encodeURIComponent(walletAddress)}&select=*&limit=1`
+    ).catch(() => []);
+    const existingPlayer = existingPlayers[0];
+
+    if (existingPlayer?.display_name || (existingPlayer && !displayName)) {
+      return existingPlayer;
+    }
+  }
 
   const [player] = await supabaseRest('players?on_conflict=wallet_address', {
     method: 'POST',

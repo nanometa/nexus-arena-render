@@ -10,6 +10,13 @@ import { useToastStore } from '../store/useToastStore';
 
 const GAME_SERVER_URL = process.env.REACT_APP_GAME_SERVER_URL || 'http://localhost:8000';
 
+async function fetchLeaderboardEntries() {
+  const response = await fetch(`${GAME_SERVER_URL}/api/leaderboard`);
+  if (!response.ok) throw new Error('Leaderboard offline');
+  const data = await response.json();
+  return Array.isArray(data.leaderboard) ? data.leaderboard : [];
+}
+
 export default function ProfilePage() {
   const playerAccount = useNexusStore((state) => state.playerAccount);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
@@ -28,9 +35,8 @@ export default function ProfilePage() {
   }, [playerAccount?.profile?.display_name, walletAddress]);
 
   useEffect(() => {
-    fetch(`${GAME_SERVER_URL}/api/leaderboard`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error('Leaderboard offline'))))
-      .then((data) => setLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []))
+    fetchLeaderboardEntries()
+      .then(setLeaderboard)
       .catch((error) => pushToast({ message: error.message || 'Leaderboard offline.' }));
   }, [pushToast]);
 
@@ -50,6 +56,9 @@ export default function ProfilePage() {
     }
     try {
       await connectAndSign(cleanName.slice(0, 18));
+      await fetchLeaderboardEntries()
+        .then(setLeaderboard)
+        .catch(() => null);
       setEditing(false);
       pushToast({ title: 'Pilot profile', message: 'Pilot name saved to this wallet.' });
     } catch (error) {

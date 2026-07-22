@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Client } from 'boardgame.io/react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Howl } from 'howler';
 import {
   LayetDuel,
   PLAYER_ID,
@@ -12,27 +11,11 @@ import {
   BOT_THINK_DELAY_MS,
   getPlacementPreview,
 } from './game';
+import { playActionSfx, playArenaSfx, playResultSfx, stopArenaAudio } from './audioEngine';
 import './LayetGame.css';
 
 const CARD_BACK = '/assets/cards/backs/card-back-deck-thumbnail.png';
 const GAME_TITLE = 'NEXUS ARENA';
-const SFX_DATA_URI =
-  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
-const SFX = {};
-
-function playSfx(name) {
-  if (typeof window === 'undefined') return;
-  if (!SFX[name]) {
-    SFX[name] = new Howl({
-      src: [SFX_DATA_URI],
-      volume: name === 'capture' ? 0.22 : 0.14,
-      rate: name === 'capture' ? 0.72 : name === 'draw' ? 1.25 : 1,
-    });
-  }
-  SFX[name].stop();
-  SFX[name].play();
-}
-
 const PARTICLE_COUNT = 28;
 
 function CardFace({ card, hidden = false, compact = false }) {
@@ -265,7 +248,20 @@ function TacticalBoard({ G, viewerID, selectedCard, previewByCell, previewCaptur
   );
 }
 
-export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVariant, playerID = PLAYER_ID }) {
+export function LayetBoard({
+  G,
+  ctx,
+  moves,
+  reset,
+  onExit,
+  onMatchEnd,
+  onResultPrimary,
+  onResultSecondary,
+  resultPrimaryLabel = 'Play again',
+  resultSecondaryLabel = 'Return to arena',
+  sceneVariant,
+  playerID = PLAYER_ID,
+}) {
   const viewerID = G.players?.[playerID] ? playerID : PLAYER_ID;
   const opponentID = viewerID === PLAYER_ID ? BOT_ID : PLAYER_ID;
   const player = G.players[viewerID];
@@ -275,6 +271,8 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   const [hoveredCell, setHoveredCell] = useState(null);
   const [activeDragCard, setActiveDragCard] = useState(null);
   const matchEndReportedRef = useRef(false);
+  const lastAudioActionRef = useRef('');
+  const lastAudioResultRef = useRef('');
   const botPlayMoveRef = useRef(moves.botPlay);
   botPlayMoveRef.current = moves.botPlay;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -322,8 +320,6 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
 
   const placeSelected = (cellIndex) => {
     if (!selectedCard || isDone || mustSacrifice || !canInteract) return;
-    const preview = previewByCell[cellIndex];
-    playSfx(preview?.captures?.length > 0 ? 'capture' : 'place');
     moves.playCard(selectedCard.uid, cellIndex);
     setSelectedUid(null);
     setHoveredCell(null);
@@ -331,7 +327,6 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
 
   const drawFromDeck = () => {
     if (!canDraw) return;
-    playSfx('draw');
     moves.drawCard();
     setSelectedUid(null);
     setHoveredCell(null);
@@ -340,12 +335,12 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   const handleHandCardClick = (card) => {
     if (isDone || !canInteract) return;
     if (mustSacrifice) {
-      playSfx('sacrifice');
       moves.sacrificeCard(card.uid);
       setSelectedUid(null);
       setHoveredCell(null);
       return;
     }
+    playArenaSfx('select', { volume: selectedUid === card.uid ? 0.45 : 0.62 });
     setSelectedUid(card.uid);
   };
 
@@ -353,6 +348,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
     if (!canInteract) return;
     const card = event.active?.data?.current?.card;
     if (!card) return;
+    playArenaSfx('select', { volume: 0.56, rate: 0.96 });
     setActiveDragCard(card);
     if (!mustSacrifice) setSelectedUid(card.uid);
   };
@@ -365,15 +361,45 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
 
     const preview = getPlacementPreview(G.board, viewerID, card, cellIndex);
     if (!preview.legal) return;
-    playSfx(preview.captures.length > 0 ? 'capture' : 'place');
     moves.playCard(card.uid, cellIndex);
     setSelectedUid(null);
     setHoveredCell(null);
   };
 
   useEffect(() => {
-    return () => Object.values(SFX).forEach((sound) => sound.stop());
+    return () => stopArenaAudio();
   }, []);
+
+  useEffect(() => {
+    const action = G.history?.[0];
+    if (!action) {
+      lastAudioActionRef.current = '';
+      return;
+    }
+
+    const signature = [
+      G.history.length,
+      G.placements,
+      action.type,
+      action.owner,
+      action.card?.uid,
+      action.cellIndex,
+    ].join(':');
+    if (signature === lastAudioActionRef.current) return;
+    lastAudioActionRef.current = signature;
+    playActionSfx(action);
+  }, [G.history, G.placements]);
+
+  useEffect(() => {
+    if (!resultTitle) {
+      lastAudioResultRef.current = '';
+      return undefined;
+    }
+    if (lastAudioResultRef.current === resultTitle) return undefined;
+    lastAudioResultRef.current = resultTitle;
+    playResultSfx(resultTitle);
+    return undefined;
+  }, [resultTitle]);
 
   useEffect(() => {
     if (canInteract) return;
@@ -574,12 +600,12 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
               </div>
 
               <div className="lg-result__actions">
-                <button className="lg-result__primary" type="button" onClick={reset}>
-                  Play again
+                <button className="lg-result__primary" type="button" onClick={onResultPrimary || reset}>
+                  {resultPrimaryLabel}
                 </button>
-                {onExit && (
-                  <button className="lg-result__secondary" type="button" onClick={onExit}>
-                    Return to arena
+                {(onResultSecondary || onExit) && (
+                  <button className="lg-result__secondary" type="button" onClick={onResultSecondary || onExit}>
+                    {resultSecondaryLabel}
                   </button>
                 )}
               </div>

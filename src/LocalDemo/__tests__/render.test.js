@@ -53,6 +53,40 @@ test('LayetBoard colors the local viewer blue and the opponent red', () => {
   expect(html).toContain('is-player is-opponent');
 });
 
+test('multiplayer result is shown from each player perspective', () => {
+  const G = LayetDuel.setup({
+    random: { Shuffle: (items) => items.slice() },
+  });
+  G.mode = 'multiplayer';
+  G.winner = PLAYER_ID;
+
+  const winnerHtml = renderToStaticMarkup(
+    <LayetBoard
+      G={G}
+      ctx={{ currentPlayer: PLAYER_ID }}
+      moves={{ playCard: jest.fn() }}
+      reset={jest.fn()}
+      playerID={PLAYER_ID}
+      resultPrimaryLabel="New match"
+    />
+  );
+  const loserHtml = renderToStaticMarkup(
+    <LayetBoard
+      G={G}
+      ctx={{ currentPlayer: PLAYER_ID }}
+      moves={{ playCard: jest.fn() }}
+      reset={jest.fn()}
+      playerID={BOT_ID}
+      resultPrimaryLabel="New match"
+    />
+  );
+
+  expect(winnerHtml).toContain('Victory');
+  expect(winnerHtml).toContain('New match');
+  expect(loserHtml).toContain('Defeat');
+  expect(loserHtml).toContain('New match');
+});
+
 test('App renders the mode selector with the duel option without throwing', () => {
   const html = renderToStaticMarkup(<App />);
   expect(html).toContain('NEXUS ARENA');

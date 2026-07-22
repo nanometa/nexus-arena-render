@@ -176,13 +176,34 @@ function serializeSupabaseEntry(entry) {
   };
 }
 
+function mergeLeaderboardProfileNames(entries, profiles) {
+  const profileNames = new Map(
+    profiles
+      .filter((profile) => profile.wallet_address && profile.display_name)
+      .map((profile) => [String(profile.wallet_address).toLowerCase(), profile.display_name])
+  );
+
+  return entries.map((entry) => ({
+    ...entry,
+    display_name:
+      profileNames.get(String(entry.wallet_address || '').toLowerCase()) || entry.display_name,
+  }));
+}
+
 async function fetchPersistentLeaderboard() {
   if (!getSupabaseStatus().enabled) return null;
   try {
     const rows = await supabaseRest(
       'leaderboard_entries?select=*&order=points.desc,wins.desc,power_for.desc,updated_at.desc&limit=25'
     );
-    return rows.map(serializeSupabaseEntry);
+    const walletAddresses = rows.map((entry) => entry.wallet_address).filter(Boolean);
+    const profiles = walletAddresses.length
+      ? await supabaseRest(
+          `players?wallet_address=in.(${walletAddresses.join(',')})&select=wallet_address,display_name`
+        ).catch(() => [])
+      : [];
+
+    return mergeLeaderboardProfileNames(rows, profiles).map(serializeSupabaseEntry);
   } catch (error) {
     return null;
   }
@@ -199,16 +220,16 @@ async function fetchPersistentMatch(matchID) {
 async function upsertPersistentLeaderboardEntry({ playerID, player, score, opponentScore, winner, playedAt }) {
   if (!player.walletAddress) return;
 
-  await ensurePlayer(player.walletAddress, player.name);
+  const profile = await ensurePlayer(player.walletAddress, player.name);
   const existingRows = await supabaseRest(
-    `leaderboard_entries?wallet_address=eq.${player.walletAddress}&select=*&limit=1`
+    `leaderboard_entries?wallet_address=eq.${encodeURIComponent(player.walletAddress)}&select=*&limit=1`
   ).catch(() => []);
   const existing = existingRows[0] || {};
   const isDraw = winner === 'draw';
   const won = winner === playerID;
   const next = {
     wallet_address: player.walletAddress,
-    display_name: player.name,
+    display_name: profile?.display_name || player.name,
     games: Number(existing.games || 0) + 1,
     wins: Number(existing.wins || 0) + (won ? 1 : 0),
     losses: Number(existing.losses || 0) + (!won && !isDraw ? 1 : 0),
@@ -231,7 +252,7 @@ async function persistMatchRecord(result, log) {
 
   const player0 = result.players['0'];
   const player1 = result.players['1'];
-  await Promise.all([
+  const [player0Profile, player1Profile] = await Promise.all([
     player0.walletAddress ? ensurePlayer(player0.walletAddress, player0.name) : Promise.resolve(),
     player1.walletAddress ? ensurePlayer(player1.walletAddress, player1.name) : Promise.resolve(),
   ]);
@@ -240,8 +261,8 @@ async function persistMatchRecord(result, log) {
     match_id: result.matchID,
     player0_wallet: player0.walletAddress || null,
     player1_wallet: player1.walletAddress || null,
-    player0_name: player0.name,
-    player1_name: player1.name,
+    player0_name: player0Profile?.display_name || player0.name,
+    player1_name: player1Profile?.display_name || player1.name,
     winner_wallet: result.winnerWallet,
     winner_player_id: result.winner,
     score: result.score,
@@ -555,4 +576,5 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
 
 module.exports = {
   createRankedResultsApi,
+  mergeLeaderboardProfileNames,
 };

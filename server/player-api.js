@@ -170,7 +170,23 @@ async function savePlayer(walletAddress, displayName) {
   }
 
   try {
-    return await ensurePlayer(walletAddress, displayName);
+    const player = await ensurePlayer(walletAddress, displayName, {
+      overwriteDisplayName: true,
+    });
+
+    await supabaseRest(
+      `leaderboard_entries?wallet_address=eq.${encodeURIComponent(walletAddress)}`,
+      {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: {
+          display_name: displayName,
+          updated_at: new Date().toISOString(),
+        },
+      }
+    ).catch(() => null);
+
+    return player;
   } catch (error) {
     const player = {
       wallet_address: walletAddress,
