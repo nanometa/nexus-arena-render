@@ -27,6 +27,8 @@ services:
         value: 0xB5CfCee0e8DC85f044b9E56b47fe54505eC2dbc1
       - key: PACK_CHAIN_STRICT
         value: "true"
+      - key: NEXUS_SESSION_SECRET
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY

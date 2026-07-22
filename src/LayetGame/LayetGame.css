@@ -2341,37 +2341,350 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.72);
-  z-index: 5;
+  padding: clamp(16px, 3vw, 42px);
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(72, 79, 195, 0.24), transparent 42%),
+    rgba(1, 5, 15, 0.88);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  z-index: 80;
+  animation: lg-result-reveal 420ms ease-out both;
 }
 
 .lg-result__panel {
-  width: min(360px, calc(100vw - 32px));
-  display: grid;
-  gap: 12px;
-  padding: 22px;
-  border: 1px solid rgba(248, 210, 122, 0.45);
-  background: #0b1013;
+  position: relative;
+  isolation: isolate;
+  width: min(720px, calc(100vw - 32px));
+  min-height: min(600px, calc(100dvh - 32px));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(238, 205, 125, 0.62);
+  clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 20px), calc(100% - 20px) 100%, 20px 100%, 0 calc(100% - 20px), 0 20px);
+  background:
+    linear-gradient(180deg, rgba(2, 7, 20, 0.03) 15%, rgba(2, 7, 20, 0.24) 46%, rgba(2, 6, 17, 0.98) 79%),
+    url('./assets/ui/results/nexus-victory-screen-v1.png') center 34% / cover no-repeat;
   text-align: center;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.65);
+  box-shadow:
+    0 32px 100px rgba(0, 0, 0, 0.82),
+    0 0 48px rgba(78, 121, 255, 0.16),
+    inset 0 0 0 4px rgba(5, 12, 31, 0.88);
+  animation: lg-result-panel-in 620ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.lg-result__panel::before,
+.lg-result__panel::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 15px;
+  width: 30%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(247, 213, 132, 0.9));
+  box-shadow: 0 0 12px rgba(247, 213, 132, 0.55);
+}
+
+.lg-result__panel::before {
+  left: 20px;
+}
+
+.lg-result__panel::after {
+  right: 20px;
+  transform: scaleX(-1);
+}
+
+.lg-result--defeat .lg-result__panel {
+  border-color: rgba(236, 101, 111, 0.62);
+  background:
+    linear-gradient(180deg, rgba(22, 3, 10, 0.18) 15%, rgba(9, 3, 12, 0.42) 48%, rgba(5, 3, 12, 0.98) 79%),
+    url('./assets/ui/results/nexus-defeat-screen-v1.png') center 36% / cover no-repeat;
+  box-shadow:
+    0 32px 100px rgba(0, 0, 0, 0.84),
+    0 0 52px rgba(198, 34, 56, 0.2),
+    inset 0 0 0 4px rgba(22, 4, 10, 0.9);
+}
+
+.lg-result--draw .lg-result__panel {
+  border-color: rgba(142, 190, 226, 0.62);
+  filter: saturate(0.8);
+}
+
+.lg-result__flare {
+  position: absolute;
+  z-index: 1;
+  top: 9%;
+  left: 50%;
+  width: 56%;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(111, 199, 255, 0.2), rgba(88, 54, 225, 0.08) 38%, transparent 70%);
+  filter: blur(5px);
+  animation: lg-result-flare 3.8s ease-in-out infinite;
+}
+
+.lg-result__particles,
+.lg-result__particles span {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.lg-result__particles span::before {
+  content: '';
+  position: absolute;
+  left: calc(8% + (var(--particle-x, 1) * 7%));
+  bottom: 21%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #f7d584;
+  box-shadow: 0 0 10px #f7d584;
+  opacity: 0;
+  animation: lg-result-particle 3.2s linear infinite;
+  animation-delay: calc(var(--particle-delay, 0) * -0.3s);
+}
+
+.lg-result__particles span:nth-child(1) { --particle-x: 1; --particle-delay: 1; }
+.lg-result__particles span:nth-child(2) { --particle-x: 2; --particle-delay: 6; }
+.lg-result__particles span:nth-child(3) { --particle-x: 3; --particle-delay: 3; }
+.lg-result__particles span:nth-child(4) { --particle-x: 4; --particle-delay: 9; }
+.lg-result__particles span:nth-child(5) { --particle-x: 5; --particle-delay: 2; }
+.lg-result__particles span:nth-child(6) { --particle-x: 6; --particle-delay: 7; }
+.lg-result__particles span:nth-child(7) { --particle-x: 7; --particle-delay: 4; }
+.lg-result__particles span:nth-child(8) { --particle-x: 8; --particle-delay: 10; }
+.lg-result__particles span:nth-child(9) { --particle-x: 9; --particle-delay: 5; }
+.lg-result__particles span:nth-child(10) { --particle-x: 10; --particle-delay: 8; }
+.lg-result__particles span:nth-child(11) { --particle-x: 11; --particle-delay: 11; }
+.lg-result__particles span:nth-child(12) { --particle-x: 12; --particle-delay: 0; }
+
+.lg-result__content {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  padding: clamp(210px, 43vh, 330px) clamp(22px, 6vw, 64px) clamp(24px, 5vh, 42px);
 }
 
 .lg-result__panel p,
-.lg-result__panel h2 {
+.lg-result__panel h2,
+.lg-result__panel small,
+.lg-result__panel strong {
   margin: 0;
 }
 
 .lg-result__panel h2 {
-  font-size: 32px;
+  margin-top: 4px;
+  color: #fff;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(48px, 9vw, 82px);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow:
+    0 2px 0 #9c7831,
+    0 0 28px rgba(255, 219, 137, 0.28),
+    0 8px 28px rgba(0, 0, 0, 0.85);
 }
 
-.lg-result__panel strong {
+.lg-result--defeat .lg-result__panel h2 {
+  color: #ff5668;
+  text-shadow:
+    0 2px 0 #5f101b,
+    0 0 30px rgba(255, 48, 77, 0.5),
+    0 8px 28px rgba(0, 0, 0, 0.9);
+}
+
+.lg-result--defeat .lg-result__eyebrow,
+.lg-result--defeat .lg-result__score-side.is-opponent strong {
+  color: #ff7180;
+}
+
+.lg-result--defeat .lg-result__score {
+  border-color: rgba(255, 76, 99, 0.32);
+  background: linear-gradient(90deg, transparent, rgba(44, 7, 18, 0.82), transparent);
+}
+
+.lg-result--defeat .lg-result__particles span::before {
+  background: #ff4b61;
+  box-shadow: 0 0 10px #ff4b61;
+}
+
+.lg-result.lg-result--defeat .lg-result__actions .lg-result__primary {
+  border-color: #ff6b78;
+  background: linear-gradient(180deg, #df5261, #8e1d2c);
+  color: #fff;
+  box-shadow: 0 0 24px rgba(226, 48, 72, 0.24);
+}
+
+.lg-result__eyebrow {
+  color: #f4cf75;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.lg-result__message {
+  margin-top: 12px !important;
+  color: #b8c5d9;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.lg-result__score {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 28px minmax(80px, 1fr);
+  align-items: center;
+  width: min(380px, 100%);
+  margin-top: 22px;
+  padding: 13px 22px;
+  border-top: 1px solid rgba(246, 211, 126, 0.3);
+  border-bottom: 1px solid rgba(246, 211, 126, 0.3);
+  background: linear-gradient(90deg, transparent, rgba(12, 23, 55, 0.82), transparent);
+}
+
+.lg-result__score-side {
+  display: grid;
+  gap: 2px;
+}
+
+.lg-result__score-side small,
+.lg-result__power small {
+  color: #8797af;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.lg-result__score-side strong {
+  color: #f5d684;
+  font-size: 31px;
+  line-height: 1;
+}
+
+.lg-result__score-side.is-player strong {
+  color: #7ce9ff;
+  text-shadow: 0 0 16px rgba(77, 220, 255, 0.45);
+}
+
+.lg-result__score-separator {
+  color: rgba(255, 255, 255, 0.4);
+  font-family: Georgia, serif;
   font-size: 24px;
-  color: #f8d27a;
 }
 
-.lg-result__panel small {
-  color: #9fb6bd;
+.lg-result__power {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: center;
+  width: min(360px, 100%);
+  margin-top: 10px;
+}
+
+.lg-result__power span {
+  display: grid;
+  gap: 2px;
+}
+
+.lg-result__power strong {
+  color: #d7dfeb;
+  font-size: 14px;
+}
+
+.lg-result__power i {
+  width: 1px;
+  height: 25px;
+  background: rgba(143, 162, 197, 0.26);
+}
+
+.lg-result__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(430px, 100%);
+  margin-top: 21px;
+}
+
+.lg-result .lg-result__actions button {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid rgba(129, 172, 219, 0.5);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+  background: rgba(8, 19, 43, 0.9);
+  color: #dcecff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+.lg-result .lg-result__actions .lg-result__primary {
+  border-color: #e8c970;
+  background: linear-gradient(180deg, #f6db91, #c99c42);
+  color: #091020;
+  box-shadow: 0 0 22px rgba(230, 191, 97, 0.2);
+}
+
+.lg-result .lg-result__actions button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+@keyframes lg-result-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lg-result-panel-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes lg-result-flare {
+  0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(0.95); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+}
+
+@keyframes lg-result-particle {
+  0% { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.5); }
+  18% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate3d(18px, -190px, 0) scale(1.2); }
+}
+
+@media (max-width: 620px) {
+  .lg-result__panel {
+    min-height: min(560px, calc(100dvh - 24px));
+  }
+
+  .lg-result__content {
+    padding: 190px 18px 22px;
+  }
+
+  .lg-result__message {
+    max-width: 270px;
+  }
+
+  .lg-result__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-result,
+  .lg-result__panel,
+  .lg-result__flare,
+  .lg-result__particles span::before {
+    animation: none;
+  }
 }
 
 @media (max-width: 980px) {
@@ -3639,6 +3952,99 @@
   border: 0;
 }
 
+.layet-arena-console__ai-mode {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  width: min(760px, 92%);
+  min-height: 86px;
+  margin: 20px auto 6px;
+  padding: 15px 22px;
+  overflow: hidden;
+  border: 1px solid rgba(245, 211, 138, 0.34);
+  border-radius: 8px;
+  color: #f7f9ff;
+  background:
+    radial-gradient(circle at 82% 50%, rgba(245, 211, 138, 0.12), transparent 34%),
+    linear-gradient(100deg, rgba(7, 17, 35, 0.94), rgba(21, 31, 57, 0.84));
+  box-shadow: inset 0 0 30px rgba(68, 199, 255, 0.06), 0 14px 34px rgba(0, 0, 0, 0.24);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.layet-arena-console__ai-mode::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(68, 199, 255, 0.08), transparent 32%, rgba(245, 211, 138, 0.06));
+}
+
+.layet-arena-console__ai-mode:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: rgba(245, 211, 138, 0.72);
+  box-shadow: inset 0 0 34px rgba(68, 199, 255, 0.1), 0 20px 42px rgba(0, 0, 0, 0.32);
+}
+
+.layet-arena-console__ai-mode:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.65);
+  opacity: 0.62;
+}
+
+.layet-arena-console__ai-index,
+.layet-arena-console__ai-copy,
+.layet-arena-console__ai-action {
+  position: relative;
+  z-index: 1;
+}
+
+.layet-arena-console__ai-index {
+  color: rgba(245, 211, 138, 0.58);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.layet-arena-console__ai-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.layet-arena-console__ai-copy small,
+.layet-arena-console__ai-copy em,
+.layet-arena-console__ai-action {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.layet-arena-console__ai-copy small {
+  color: #f5d38a;
+}
+
+.layet-arena-console__ai-copy strong {
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.layet-arena-console__ai-copy em {
+  color: rgba(174, 194, 220, 0.7);
+}
+
+.layet-arena-console__ai-action {
+  padding: 11px 14px;
+  border-left: 1px solid rgba(245, 211, 138, 0.28);
+  color: #e9d49f;
+  white-space: nowrap;
+}
+
 .layet-arena-console__join .layet-multiplayer-lobby__field input {
   border: 0;
   background: rgba(5, 9, 20, 0.72);
@@ -3683,6 +4089,22 @@
   .layet-arena-console__modes .layet-multiplayer-lobby__mode-card:nth-of-type(2) .layet-arena-mode__index {
     top: 40px;
     right: 42px;
+  }
+
+  .layet-arena-console__ai-mode {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .layet-arena-console__ai-action {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .layet-arena-console__ai-mode {
+    width: 100%;
+    margin-top: 12px;
+    padding-inline: 16px;
   }
 }
 

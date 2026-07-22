@@ -2,6 +2,13 @@ const { ethers } = require('ethers');
 const { normalizeAddress } = require('./onchain/genesisPack');
 const { getSupabaseStatus, supabaseRest } = require('./supabase/client');
 const { ensurePlayer, getInventory, getPacks } = require('./packs-api');
+const { reserveWalletSeat } = require('./security/match-claims');
+const {
+  consumeLoginNonce,
+  issueMatchTicket,
+  issueSessionToken,
+  requireSession,
+} = require('./security/session');
 
 const MAX_BODY_BYTES = 64 * 1024;
 const LOGIN_MAX_AGE_MS = 15 * 60 * 1000;
@@ -26,7 +33,7 @@ function setApiCors(ctx, allowedOrigins) {
     ctx.set('Vary', 'Origin');
   }
   ctx.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  ctx.set('Access-Control-Allow-Headers', 'Content-Type');
+  ctx.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 }
 
 function readJSONBody(ctx) {
@@ -88,7 +95,7 @@ function getMessageField(message, field) {
   return match?.[1] || '';
 }
 
-function verifyWalletSignature({ walletAddress, message, signature }) {
+function verifyWalletSignature({ walletAddress, message, signature, requestOrigin, allowedOrigins }) {
   if (!message || !signature) {
     const error = new Error('Wallet signature is required');
     error.status = 401;
@@ -98,6 +105,17 @@ function verifyWalletSignature({ walletAddress, message, signature }) {
   const messageWallet = walletFromValue(getMessageField(message, 'Wallet'));
   if (messageWallet !== walletAddress) {
     const error = new Error('Signed wallet does not match requested wallet');
+    error.status = 401;
+    throw error;
+  }
+
+  const signedOrigin = getMessageField(message, 'Origin');
+  if (
+    !signedOrigin ||
+    (requestOrigin && signedOrigin !== requestOrigin) ||
+    !isOriginAllowed(signedOrigin, allowedOrigins)
+  ) {
+    const error = new Error('Signed login origin is not allowed');
     error.status = 401;
     throw error;
   }
@@ -115,6 +133,14 @@ function verifyWalletSignature({ walletAddress, message, signature }) {
     error.status = 401;
     throw error;
   }
+
+  consumeLoginNonce(walletAddress, getMessageField(message, 'Nonce'));
+
+  return {
+    displayName: cleanDisplayName(getMessageField(message, 'Name')),
+    issuedAt,
+    origin: signedOrigin,
+  };
 }
 
 async function getPlayer(walletAddress) {
@@ -221,12 +247,19 @@ function createPlayerApi({ allowedOrigins }) {
       try {
         const body = await readJSONBody(ctx);
         const walletAddress = walletFromValue(body.walletAddress);
-        verifyWalletSignature({
+        const signedLogin = verifyWalletSignature({
           walletAddress,
           message: body.message,
           signature: body.signature,
+          requestOrigin: ctx.get('origin'),
+          allowedOrigins,
         });
         const requestedDisplayName = cleanDisplayName(body.displayName);
+        if (requestedDisplayName && requestedDisplayName !== signedLogin.displayName) {
+          ctx.status = 401;
+          ctx.body = { error: 'Display name does not match the signed login message' };
+          return;
+        }
         const existingProfile = await getPlayer(walletAddress);
         const displayName = resolvePlayerDisplayName(
           walletAddress,
@@ -240,14 +273,98 @@ function createPlayerApi({ allowedOrigins }) {
         const profile = shouldSaveProfile
           ? await savePlayer(walletAddress, displayName)
           : existingProfile;
+        const session = issueSessionToken(walletAddress);
+        ctx.set('Cache-Control', 'no-store');
         ctx.body = {
           ...(await buildPlayerDashboard(walletAddress, profile)),
           authenticated: true,
+          sessionToken: session.token,
+          sessionExpiresAt: session.expiresAt,
         };
         return;
       } catch (error) {
         ctx.status = error.status || 500;
         ctx.body = { error: error.message || 'Player session failed' };
+        return;
+      }
+    }
+
+    if (ctx.path === '/api/player/match-ticket' && ctx.method === 'POST') {
+      try {
+        const session = requireSession(ctx);
+        const body = await readJSONBody(ctx);
+        const matchID = String(body.matchID || '').trim();
+        const playerID = String(body.playerID ?? '');
+        const mode = body.mode === 'private' ? 'private' : 'matchmaking';
+
+        if (!/^[A-Za-z0-9_-]{6,128}$/.test(matchID)) {
+          ctx.status = 400;
+          ctx.body = { error: 'Valid matchID is required' };
+          return;
+        }
+        if (playerID !== '0' && playerID !== '1') {
+          ctx.status = 400;
+          ctx.body = { error: 'Valid playerID is required' };
+          return;
+        }
+
+        const { metadata } = await ctx.app.context.db.fetch(matchID, { metadata: true });
+        if (!metadata) {
+          ctx.status = 404;
+          ctx.body = { error: 'Match not found' };
+          return;
+        }
+        if ((metadata.setupData?.mode || 'private') !== mode) {
+          ctx.status = 409;
+          ctx.body = { error: 'Match mode does not match' };
+          return;
+        }
+        const seat = metadata.players?.[playerID];
+        if (!seat || seat.name) {
+          ctx.status = 409;
+          ctx.body = { error: 'Player seat is not available' };
+          return;
+        }
+
+        const opponentID = playerID === '0' ? '1' : '0';
+        const opponentWallet = normalizeAddress(
+          metadata.players?.[opponentID]?.data?.walletAddress || ''
+        );
+        if (opponentWallet && opponentWallet === session.walletAddress) {
+          ctx.status = 403;
+          ctx.body = { error: 'The same wallet cannot occupy both player seats' };
+          return;
+        }
+
+        const dashboard = await buildPlayerDashboard(session.walletAddress);
+        if (dashboard.inventory.length !== 20) {
+          ctx.status = 403;
+          ctx.body = { error: 'A verified 20-card Genesis inventory is required' };
+          return;
+        }
+
+        reserveWalletSeat({
+          matchID,
+          playerID,
+          walletAddress: session.walletAddress,
+        });
+
+        ctx.set('Cache-Control', 'no-store');
+        ctx.body = {
+          walletAddress: session.walletAddress,
+          matchID,
+          playerID,
+          identityTicket: issueMatchTicket({
+            walletAddress: session.walletAddress,
+            matchID,
+            playerID,
+            mode,
+          }),
+        };
+        return;
+      } catch (error) {
+        ctx.status = error.status || 500;
+        ctx.body = { error: error.message || 'Match authorization failed' };
         return;
       }
     }

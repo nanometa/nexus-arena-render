@@ -7,10 +7,18 @@ import {
   BOARD_SIZE,
   CARDS_PER_PLAYER,
   ELEMENT_BONUS,
+  BOT_THINK_DELAY_MS,
   getPlacementPreview,
   isLegalPlacement,
+  publicView,
   resolveCapture,
 } from '../game';
+import { LayetDuelMultiplayer } from '../game.multiplayer';
+
+test('undo and redo are disabled for every duel mode', () => {
+  expect(LayetDuel.disableUndo).toBe(true);
+  expect(LayetDuelMultiplayer.disableUndo).toBe(true);
+});
 
 test('setup creates a 4x4 board and hidden-ready 8-card hands from the catalog', () => {
   const client = Client({ game: LayetDuel, numPlayers: 2, playerID: PLAYER_ID });
@@ -28,6 +36,30 @@ test('setup creates a 4x4 board and hidden-ready 8-card hands from the catalog',
   expect(state.G.players[BOT_ID].hand[0].hidden).toBe(true);
 });
 
+test('player views never expose deck order, opponent hands, or opponent draws', () => {
+  const G = LayetDuel.setup({ random: { Shuffle: (items) => items.slice() } });
+  const opponentDrawnCard = G.players[BOT_ID].deck[0];
+  G.lastAction = {
+    type: 'draw',
+    owner: BOT_ID,
+    card: opponentDrawnCard,
+    drawn: [opponentDrawnCard],
+  };
+  G.history = [G.lastAction];
+
+  const view = publicView(G, PLAYER_ID);
+  expect(view.players[PLAYER_ID].hand[0].hidden).not.toBe(true);
+  expect(view.players[PLAYER_ID].deck.every((card) => card.hidden)).toBe(true);
+  expect(view.players[BOT_ID].hand.every((card) => card.hidden)).toBe(true);
+  expect(view.players[BOT_ID].deck.every((card) => card.hidden)).toBe(true);
+  expect(view.lastAction.card).toEqual({ hidden: true });
+  expect(view.history[0].drawn).toEqual([{ hidden: true }]);
+
+  const spectatorView = publicView(G, null);
+  expect(spectatorView.players[PLAYER_ID].hand.every((card) => card.hidden)).toBe(true);
+  expect(spectatorView.players[BOT_ID].hand.every((card) => card.hidden)).toBe(true);
+});
+
 test('element advantage adds the configured capture bonus', () => {
   const fire = { element: 'fire', score: 500 };
   const nature = { element: 'nature', score: 520 };
@@ -38,12 +70,21 @@ test('element advantage adds the configured capture bonus', () => {
   expect(result.captured).toBe(true);
 });
 
-test('playing a card places it on the board, then the bot answers automatically without player auto-draw', () => {
+test('playing a card queues the bot, then its dedicated move answers without player auto-draw', () => {
   const client = Client({ game: LayetDuel, numPlayers: 2, playerID: PLAYER_ID });
   client.start();
   const firstCard = client.getState().G.players[PLAYER_ID].hand[0];
 
   client.moves.playCard(firstCard.uid, 0);
+  const pendingState = client.getState();
+
+  expect(BOT_THINK_DELAY_MS).toBe(1500);
+  expect(pendingState.G.botPending).toBe(true);
+  expect(pendingState.G.history).toHaveLength(1);
+  expect(pendingState.G.placements).toBe(1);
+  expect(pendingState.G.players[BOT_ID].played).toHaveLength(0);
+
+  client.moves.botPlay();
   const state = client.getState();
 
   expect(state.G.history).toHaveLength(2);
@@ -57,6 +98,31 @@ test('playing a card places it on the board, then the bot answers automatically 
   expect(state.G.history[0].drawn).toHaveLength(0);
   expect(state.G.history[1].drawn).toHaveLength(0);
   expect(state.G.turnNumber).toBe(2);
+});
+
+test('AI duel completes a full board with one legal bot response per player turn', () => {
+  const client = Client({ game: LayetDuel, numPlayers: 2, playerID: PLAYER_ID });
+  client.start();
+
+  for (let round = 0; round < BOARD_SIZE / 2; round += 1) {
+    const before = client.getState().G;
+    const playerCard = before.players[PLAYER_ID].hand[0];
+    const emptyCell = before.board.find((cell) => !cell.card);
+
+    expect(playerCard).toBeDefined();
+    expect(emptyCell).toBeDefined();
+    client.moves.playCard(playerCard.uid, emptyCell.index);
+    if (!client.getState().G.winner) client.moves.botPlay();
+  }
+
+  const state = client.getState();
+  expect(state.G.placements).toBe(BOARD_SIZE);
+  expect(state.G.board.every((cell) => Boolean(cell.card))).toBe(true);
+  expect(state.G.players[PLAYER_ID].played).toHaveLength(BOARD_SIZE / 2);
+  expect(state.G.players[BOT_ID].played).toHaveLength(BOARD_SIZE / 2);
+  expect(state.G.history.filter((action) => action.type === 'play')).toHaveLength(BOARD_SIZE);
+  expect([PLAYER_ID, BOT_ID, 'draw']).toContain(state.G.winner);
+  expect(state.G.phase).toBe('finished');
 });
 
 test('player draws manually once per round and must sacrifice when hand exceeds eight', () => {

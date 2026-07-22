@@ -2,6 +2,7 @@ const { ethers } = require('ethers');
 const { loadCardCatalog, summarizeCatalog } = require('./cards/catalog');
 const { getGenesisPackStatus, normalizeAddress, readPackDropStats, verifyPackMinted, verifyPackOpened } = require('./onchain/genesisPack');
 const { getSupabaseStatus, supabaseRest } = require('./supabase/client');
+const { requireSession } = require('./security/session');
 
 const MAX_BODY_BYTES = 96 * 1024;
 const CARDS_PER_PACK = 20;
@@ -34,7 +35,7 @@ function setApiCors(ctx, allowedOrigins) {
     ctx.set('Vary', 'Origin');
   }
   ctx.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  ctx.set('Access-Control-Allow-Headers', 'Content-Type');
+  ctx.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 }
 
 function readJSONBody(ctx) {
@@ -362,8 +363,14 @@ function createPacksApi({ allowedOrigins }) {
 
     if (ctx.path === '/api/packs/register-mint' && ctx.method === 'POST') {
       try {
+        const session = requireSession(ctx);
         const body = await readJSONBody(ctx);
         const walletAddress = walletFromValue(body.walletAddress);
+        if (walletAddress !== session.walletAddress) {
+          ctx.status = 403;
+          ctx.body = { error: 'Wallet session does not match mint recipient' };
+          return;
+        }
         const tokenId = tokenFromValue(body.tokenId);
         const txHash = txHashFromValue(body.txHash);
         const existingPacks = await getPacks(walletAddress);
@@ -408,8 +415,14 @@ function createPacksApi({ allowedOrigins }) {
 
     if (ctx.path === '/api/packs/open' && ctx.method === 'POST') {
       try {
+        const session = requireSession(ctx);
         const body = await readJSONBody(ctx);
         const walletAddress = walletFromValue(body.walletAddress);
+        if (walletAddress !== session.walletAddress) {
+          ctx.status = 403;
+          ctx.body = { error: 'Wallet session does not match pack owner' };
+          return;
+        }
         const tokenId = tokenFromValue(body.tokenId);
         const txHash = txHashFromValue(body.txHash);
 

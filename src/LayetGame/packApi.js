@@ -20,6 +20,13 @@ async function readResponse(response) {
   return data;
 }
 
+function authenticatedHeaders(sessionToken) {
+  return {
+    'Content-Type': 'application/json',
+    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+  };
+}
+
 export async function fetchPackStatus() {
   const response = await fetch(`${GAME_SERVER_URL}/api/packs/status`);
   return readResponse(response);
@@ -42,29 +49,34 @@ export async function createPlayerSession({ walletAddress, displayName, message,
   return readResponse(response);
 }
 
+export async function requestMatchTicket({ sessionToken, matchID, playerID, mode }) {
+  const response = await fetch(`${GAME_SERVER_URL}/api/player/match-ticket`, {
+    method: 'POST',
+    headers: authenticatedHeaders(sessionToken),
+    body: JSON.stringify({ matchID, playerID, mode }),
+  });
+  return readResponse(response);
+}
+
 export async function fetchPlayerDashboard(walletAddress) {
   const params = new URLSearchParams({ walletAddress });
   const response = await fetch(`${GAME_SERVER_URL}/api/player/dashboard?${params.toString()}`);
   return readResponse(response);
 }
 
-export async function registerPackMint({ walletAddress, tokenId, txHash, displayName }) {
+export async function registerPackMint({ walletAddress, tokenId, txHash, displayName, sessionToken }) {
   const response = await fetch(`${GAME_SERVER_URL}/api/packs/register-mint`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: authenticatedHeaders(sessionToken),
     body: JSON.stringify({ walletAddress, tokenId, txHash, displayName }),
   });
   return readResponse(response);
 }
 
-export async function registerPackOpen({ walletAddress, tokenId, txHash, displayName }) {
+export async function registerPackOpen({ walletAddress, tokenId, txHash, displayName, sessionToken }) {
   const response = await fetch(`${GAME_SERVER_URL}/api/packs/open`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: authenticatedHeaders(sessionToken),
     body: JSON.stringify({ walletAddress, tokenId, txHash, displayName }),
   });
   return readResponse(response);

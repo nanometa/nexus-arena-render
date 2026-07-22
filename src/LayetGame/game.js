@@ -9,6 +9,7 @@ export const BOARD_ROWS = 4;
 export const BOARD_SIZE = BOARD_ROWS * BOARD_COLS;
 export const CARDS_PER_PLAYER = 25;
 export const ELEMENT_BONUS = 35;
+export const BOT_THINK_DELAY_MS = 1500;
 
 export const GAME_PHASES = {
   SELECT_CARD: 'selectCard',
@@ -513,22 +514,40 @@ export function maybeFinish(G) {
 
 export function publicView(G, playerID) {
   const view = clone(G);
-  const opponentID = playerID === BOT_ID ? PLAYER_ID : BOT_ID;
-  if (view.players[opponentID]) {
-    view.players[opponentID].hand = view.players[opponentID].hand.map((_, index) => ({
-      uid: `hidden-${opponentID}-${index}`,
+  const viewerID = playerID === PLAYER_ID || playerID === BOT_ID ? playerID : null;
+
+  Object.entries(view.players || {}).forEach(([owner, player]) => {
+    if (owner !== viewerID) {
+      player.hand = player.hand.map((_, index) => ({
+        uid: `hidden-hand-${owner}-${index}`,
+        hidden: true,
+      }));
+    }
+
+    // Deck order is private even to its owner; only the remaining count is public.
+    player.deck = Array.from({ length: player.deck.length }, (_, index) => ({
+      uid: `hidden-deck-${owner}-${index}`,
       hidden: true,
     }));
-    view.players[opponentID].deck = Array.from(
-      { length: view.players[opponentID].deck.length },
-      (_, index) => ({ uid: `hidden-deck-${opponentID}-${index}`, hidden: true })
-    );
-  }
+  });
+
+  const redactAction = (action) => {
+    if (!action || action.type !== 'draw' || action.owner === viewerID) return action;
+    return {
+      ...action,
+      card: action.card ? { hidden: true } : action.card,
+      drawn: Array.isArray(action.drawn) ? action.drawn.map(() => ({ hidden: true })) : [],
+    };
+  };
+
+  view.lastAction = redactAction(view.lastAction);
+  view.history = Array.isArray(view.history) ? view.history.map(redactAction) : [];
   return view;
 }
 
 export const LayetDuel = {
   name: 'layet-vm-board-control',
+  disableUndo: true,
   setup: ({ random }) => {
     const usedIds = new Set();
     const playerDeck = makeDeck(random, usedIds, PLAYER_ID);
@@ -565,6 +584,7 @@ export const LayetDuel = {
       turnNumber: 1,
       drawsThisTurn: createDrawFlags(),
       sacrificeRequired: null,
+      botPending: false,
       score: {
         [PLAYER_ID]: { cards: 0, power: 0 },
         [BOT_ID]: { cards: 0, power: 0 },
@@ -585,6 +605,7 @@ export const LayetDuel = {
     drawCard({ G, playerID }) {
       if (G.winner) return INVALID_MOVE;
       if (playerID !== PLAYER_ID) return INVALID_MOVE;
+      if (G.botPending) return INVALID_MOVE;
       if (G.sacrificeRequired) return INVALID_MOVE;
 
       const action = drawOneCard(G, PLAYER_ID);
@@ -596,6 +617,7 @@ export const LayetDuel = {
     sacrificeCard({ G, playerID }, cardUid) {
       if (G.winner) return INVALID_MOVE;
       if (playerID !== PLAYER_ID) return INVALID_MOVE;
+      if (G.botPending) return INVALID_MOVE;
 
       const action = sacrificeFromHand(G, PLAYER_ID, cardUid);
       if (!action) return INVALID_MOVE;
@@ -606,6 +628,7 @@ export const LayetDuel = {
     playCard({ G, playerID }, cardUid, cellIndex) {
       if (G.winner) return INVALID_MOVE;
       if (playerID !== PLAYER_ID) return INVALID_MOVE;
+      if (G.botPending) return INVALID_MOVE;
       if (G.sacrificeRequired === PLAYER_ID) return INVALID_MOVE;
 
       const playerAction = placeCard(G, PLAYER_ID, cardUid, cellIndex);
@@ -615,10 +638,19 @@ export const LayetDuel = {
       G.history.unshift(playerAction);
       maybeFinish(G);
       if (G.winner) {
+        G.botPending = false;
         G.phase = GAME_PHASES.FINISHED;
         return;
       }
 
+      G.botPending = true;
+    },
+    botPlay({ G, playerID }) {
+      if (G.winner) return INVALID_MOVE;
+      if (playerID !== PLAYER_ID) return INVALID_MOVE;
+      if (!G.botPending) return INVALID_MOVE;
+
+      G.botPending = false;
       botPrepareRound(G);
       const botChoice = chooseBotMove(G);
       if (botChoice) {

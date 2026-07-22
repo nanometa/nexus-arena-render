@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Client } from 'boardgame.io/react';
 import { LobbyClient } from 'boardgame.io/client';
 import { Local, SocketIO } from 'boardgame.io/multiplayer';
-import { LayetBoard } from './LayetGame';
+import LayetGame, { LayetBoard } from './LayetGame';
 import { LayetDuelMultiplayer } from './game.multiplayer';
 import { BOT_ID, PLAYER_ID } from './game';
 import {
@@ -20,6 +20,7 @@ import {
   createPlayerSession,
   fetchPlayerDashboard,
   fetchPackStatus,
+  requestMatchTicket,
   registerPackMint,
   registerPackOpen,
 } from './packApi';
@@ -71,6 +72,17 @@ function hasFreeSeat(match) {
   return Boolean(match?.players?.some((player) => !player.name));
 }
 
+function freeSeatID(match) {
+  const seat = match?.players?.find((player) => !player.name);
+  return seat?.id === undefined ? '' : String(seat.id);
+}
+
+function authenticatedRequest(sessionToken) {
+  return {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  };
+}
+
 function isJoinConflict(error) {
   return error?.message?.includes('409') || String(error?.details || '').includes('not available');
 }
@@ -82,7 +94,7 @@ async function findOpenMatchmakingRoom(lobbyClient) {
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0];
 }
 
-function createSession(matchID, joinResult, playerName, mode, walletAddress) {
+function createSession(matchID, joinResult, playerName, mode, walletAddress, sessionToken) {
   return {
     matchID,
     playerID: joinResult.playerID,
@@ -90,6 +102,7 @@ function createSession(matchID, joinResult, playerName, mode, walletAddress) {
     playerName,
     mode,
     walletAddress,
+    sessionToken,
   };
 }
 
@@ -168,6 +181,8 @@ function normalizeDashboard(data) {
     inventory: Array.isArray(data.inventory) ? data.inventory : [],
     matches: Array.isArray(data.matches) ? data.matches : [],
     authenticated: Boolean(data.authenticated),
+    sessionToken: data.sessionToken || '',
+    sessionExpiresAt: Number(data.sessionExpiresAt || 0),
   };
 }
 
@@ -209,6 +224,8 @@ function GenesisPackPanel({ playerName, playerAccount, onInventoryReady, onPlaye
     const dashboard = normalizeDashboard({
       ...data,
       authenticated: Boolean(data?.authenticated || playerAccount?.authenticated),
+      sessionToken: data?.sessionToken || playerAccount?.sessionToken,
+      sessionExpiresAt: data?.sessionExpiresAt || playerAccount?.sessionExpiresAt,
     });
     if (!dashboard) return null;
     setWalletAddress(dashboard.walletAddress || '');
@@ -291,6 +308,7 @@ function GenesisPackPanel({ playerName, playerAccount, onInventoryReady, onPlaye
         tokenId: minted.tokenId,
         txHash: minted.txHash,
         displayName: playerName,
+        sessionToken: playerAccount?.sessionToken,
       });
       setPacks(Array.isArray(data.packs) ? data.packs : []);
       setInventory(Array.isArray(data.inventory) ? data.inventory : []);
@@ -324,6 +342,7 @@ function GenesisPackPanel({ playerName, playerAccount, onInventoryReady, onPlaye
         tokenId: opened.tokenId,
         txHash: opened.txHash,
         displayName: playerName,
+        sessionToken: playerAccount?.sessionToken,
       });
       setPacks(Array.isArray(data.packs) ? data.packs : []);
       setInventory(Array.isArray(data.inventory) ? data.inventory : []);
@@ -565,6 +584,7 @@ async function submitRankedMatchResult(session) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(session.sessionToken ? { Authorization: `Bearer ${session.sessionToken}` } : {}),
     },
     body: JSON.stringify({
       matchID: session.matchID,
@@ -628,6 +648,7 @@ function LayetMultiplayerLobby({
   onExit,
   onJoinOnline,
   onWaitForOpponent,
+  onStartAI,
   playerAccount,
   onPlayerAccountChange,
   canPlay,
@@ -643,6 +664,7 @@ function LayetMultiplayerLobby({
 
   const cleanPlayerName = playerName.trim() || 'Player';
   const walletAddress = playerAccount?.walletAddress || '';
+  const sessionToken = playerAccount?.sessionToken || '';
   const isArenaRoute = lobbyVariant === 'arena';
   const lockedCopy = isArenaRoute ? 'Connect and open a pack on Mint first.' : 'Open pack to unlock.';
 
@@ -687,11 +709,24 @@ function LayetMultiplayerLobby({
         if (!openMatch) break;
 
         try {
-          const joinResult = await lobbyClient.joinMatch(GAME_NAME, openMatch.matchID, {
-            playerName: cleanPlayerName,
-            data: { mode: MATCHMAKING_SETUP.mode, walletAddress },
+          const playerID = freeSeatID(openMatch);
+          if (!playerID) continue;
+          const ticket = await requestMatchTicket({
+            sessionToken,
+            matchID: openMatch.matchID,
+            playerID,
+            mode: 'matchmaking',
           });
-          onJoinOnline(createSession(openMatch.matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress));
+          const joinResult = await lobbyClient.joinMatch(GAME_NAME, openMatch.matchID, {
+            playerID,
+            playerName: cleanPlayerName,
+            data: {
+              mode: MATCHMAKING_SETUP.mode,
+              walletAddress: ticket.walletAddress,
+              identityTicket: ticket.identityTicket,
+            },
+          }, authenticatedRequest(sessionToken));
+          onJoinOnline(createSession(openMatch.matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress, sessionToken));
           return;
         } catch (error) {
           if (!isJoinConflict(error)) throw error;
@@ -701,14 +736,24 @@ function LayetMultiplayerLobby({
       const { matchID } = await lobbyClient.createMatch(GAME_NAME, {
         numPlayers: 2,
         setupData: MATCHMAKING_SETUP,
+      }, authenticatedRequest(sessionToken));
+      const ticket = await requestMatchTicket({
+        sessionToken,
+        matchID,
+        playerID: PLAYER_ID,
+        mode: 'matchmaking',
       });
       const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
         playerID: PLAYER_ID,
         playerName: cleanPlayerName,
-        data: { mode: MATCHMAKING_SETUP.mode, walletAddress },
-      });
+        data: {
+          mode: MATCHMAKING_SETUP.mode,
+          walletAddress: ticket.walletAddress,
+          identityTicket: ticket.identityTicket,
+        },
+      }, authenticatedRequest(sessionToken));
 
-      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress));
+      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress, sessionToken));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -733,14 +778,24 @@ function LayetMultiplayerLobby({
         numPlayers: 2,
         setupData: { mode: 'private' },
         unlisted: true,
+      }, authenticatedRequest(sessionToken));
+      const ticket = await requestMatchTicket({
+        sessionToken,
+        matchID,
+        playerID: PLAYER_ID,
+        mode: 'private',
       });
       const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
         playerID: PLAYER_ID,
         playerName: cleanPlayerName,
-        data: { mode: 'private', walletAddress },
-      });
+        data: {
+          mode: 'private',
+          walletAddress: ticket.walletAddress,
+          identityTicket: ticket.identityTicket,
+        },
+      }, authenticatedRequest(sessionToken));
 
-      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
+      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress, sessionToken));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -768,12 +823,30 @@ function LayetMultiplayerLobby({
     setBusy(true);
     setStatus('Joining room...');
     try {
-      const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
-        playerName: cleanPlayerName,
-        data: { mode: 'private', walletAddress },
+      const match = await lobbyClient.getMatch(
+        GAME_NAME,
+        matchID,
+        authenticatedRequest(sessionToken)
+      );
+      const playerID = freeSeatID(match);
+      if (!playerID) throw new Error('Room is full');
+      const ticket = await requestMatchTicket({
+        sessionToken,
+        matchID,
+        playerID,
+        mode: 'private',
       });
+      const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
+        playerID,
+        playerName: cleanPlayerName,
+        data: {
+          mode: 'private',
+          walletAddress: ticket.walletAddress,
+          identityTicket: ticket.identityTicket,
+        },
+      }, authenticatedRequest(sessionToken));
 
-      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress));
+      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress, sessionToken));
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -851,6 +924,21 @@ function LayetMultiplayerLobby({
                 <em>Create invitation</em>
               </button>
             </div>
+
+            <button
+              type="button"
+              className="layet-arena-console__ai-mode"
+              onClick={onStartAI}
+              disabled={busy || !canPlay}
+            >
+              <span className="layet-arena-console__ai-index">03</span>
+              <span className="layet-arena-console__ai-copy">
+                <small>Training Grounds</small>
+                <strong>AI Duel</strong>
+                <em>{canPlay ? 'Instant battle · no ranked points' : lockedCopy}</em>
+              </span>
+              <span className="layet-arena-console__ai-action">Challenge AI</span>
+            </button>
 
             <form className="layet-multiplayer-lobby__join layet-arena-console__join" onSubmit={joinRoom}>
               <label className="layet-multiplayer-lobby__field">
@@ -1244,6 +1332,14 @@ export default function LayetMultiplayer({
     return <LocalPreviewMatch onBackToLobby={() => setMode('lobby')} />;
   }
 
+  if (mode === 'ai') {
+    return (
+      <div className="layet-multiplayer">
+        <LayetGame sceneVariant="page2" onExit={() => setMode('lobby')} />
+      </div>
+    );
+  }
+
   if (mode === 'waiting' && session) {
     return (
       <MatchmakingWaiting
@@ -1337,6 +1433,7 @@ export default function LayetMultiplayer({
         setSession(nextSession);
         setMode('waiting');
       }}
+      onStartAI={() => setMode('ai')}
     />
   );
 }

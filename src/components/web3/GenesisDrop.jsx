@@ -197,6 +197,7 @@ export default function GenesisDrop() {
         tokenId,
         txHash: hash,
         displayName: playerAccount?.profile?.display_name || 'Pilot',
+        sessionToken: playerAccount?.sessionToken,
       });
       await refreshDashboard();
       await loadDrop();
@@ -227,6 +228,7 @@ export default function GenesisDrop() {
         tokenId,
         txHash: hash,
         displayName: playerAccount?.profile?.display_name || 'Pilot',
+        sessionToken: playerAccount?.sessionToken,
       });
       await refreshDashboard();
       await loadDrop();

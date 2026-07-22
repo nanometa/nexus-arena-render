@@ -21,6 +21,8 @@ export default function WalletLanding() {
     setBusy(true);
     try {
       await connectAndSign();
+    } catch (error) {
+      // useWalletLogin already displays the contextual error toast.
     } finally {
       setBusy(false);
     }

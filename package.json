@@ -10,6 +10,7 @@
     "seed:supabase-cards": "node scripts/seed-supabase-cards.cjs",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:security": "node --test server/security/*.test.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

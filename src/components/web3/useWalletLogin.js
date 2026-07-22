@@ -17,6 +17,14 @@ function isRejected(error) {
   return error?.code === 4001 || message.includes('reject') || message.includes('denied');
 }
 
+function loginErrorMessage(error) {
+  const message = String(error?.shortMessage || error?.message || error || '');
+  if (message.toLowerCase().includes('failed to fetch')) {
+    return 'Game server unavailable. Please retry in a moment.';
+  }
+  return walletErrorMessage(error);
+}
+
 export function useWalletLogin() {
   const { address, chainId } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
@@ -71,7 +79,7 @@ export function useWalletLogin() {
     } catch (error) {
       const message = isRejected(error)
         ? 'User rejected the signature request.'
-        : walletErrorMessage(error);
+        : loginErrorMessage(error);
       pushToast({
         title: 'Wallet connection failed',
         message,

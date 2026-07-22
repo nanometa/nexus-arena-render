@@ -9,6 +9,7 @@ import {
   BOT_ID,
   ELEMENT_META,
   ELEMENT_BONUS,
+  BOT_THINK_DELAY_MS,
   getPlacementPreview,
 } from './game';
 import './LayetGame.css';
@@ -274,8 +275,12 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   const [hoveredCell, setHoveredCell] = useState(null);
   const [activeDragCard, setActiveDragCard] = useState(null);
   const matchEndReportedRef = useRef(false);
+  const botPlayMoveRef = useRef(moves.botPlay);
+  botPlayMoveRef.current = moves.botPlay;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const mustSacrifice = G.sacrificeRequired === viewerID;
+  const isBotThinking = !isMultiplayer && Boolean(G.botPending);
+  const canInteract = isViewerTurn && !isBotThinking;
   const selectedCard = useMemo(
     () => (mustSacrifice ? null : player.hand.find((card) => card.uid === selectedUid) || null),
     [player.hand, selectedUid, mustSacrifice]
@@ -301,7 +306,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   const isDone = Boolean(G.winner);
   const canDraw =
     !isDone &&
-    isViewerTurn &&
+    canInteract &&
     !mustSacrifice &&
     !G.drawsThisTurn?.[viewerID] &&
     player.deck.length > 0;
@@ -309,12 +314,14 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
     G.winner === viewerID ? 'Victory' : G.winner === opponentID ? 'Defeat' : G.winner === 'draw' ? 'Draw' : '';
   const turnLabel = isDone
     ? 'Match Complete'
-    : isViewerTurn
+    : isBotThinking
+      ? 'Opponent Turn'
+      : isViewerTurn
       ? 'Your Turn'
       : 'Opponent Turn';
 
   const placeSelected = (cellIndex) => {
-    if (!selectedCard || isDone || mustSacrifice || !isViewerTurn) return;
+    if (!selectedCard || isDone || mustSacrifice || !canInteract) return;
     const preview = previewByCell[cellIndex];
     playSfx(preview?.captures?.length > 0 ? 'capture' : 'place');
     moves.playCard(selectedCard.uid, cellIndex);
@@ -331,7 +338,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   };
 
   const handleHandCardClick = (card) => {
-    if (isDone || !isViewerTurn) return;
+    if (isDone || !canInteract) return;
     if (mustSacrifice) {
       playSfx('sacrifice');
       moves.sacrificeCard(card.uid);
@@ -343,7 +350,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   };
 
   const handleDragStart = (event) => {
-    if (!isViewerTurn) return;
+    if (!canInteract) return;
     const card = event.active?.data?.current?.card;
     if (!card) return;
     setActiveDragCard(card);
@@ -354,7 +361,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
     const card = event.active?.data?.current?.card;
     const cellIndex = event.over?.data?.current?.cellIndex;
     setActiveDragCard(null);
-    if (!card || cellIndex === undefined || isDone || mustSacrifice || !isViewerTurn) return;
+    if (!card || cellIndex === undefined || isDone || mustSacrifice || !canInteract) return;
 
     const preview = getPlacementPreview(G.board, viewerID, card, cellIndex);
     if (!preview.legal) return;
@@ -369,10 +376,20 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
   }, []);
 
   useEffect(() => {
-    if (isViewerTurn) return;
+    if (canInteract) return;
     setSelectedUid(null);
     setHoveredCell(null);
-  }, [isViewerTurn]);
+  }, [canInteract]);
+
+  useEffect(() => {
+    if (isMultiplayer || !G.botPending || G.winner) return undefined;
+
+    const timeoutID = window.setTimeout(() => {
+      botPlayMoveRef.current?.();
+    }, BOT_THINK_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutID);
+  }, [G.botPending, G.winner, isMultiplayer]);
 
   useEffect(() => {
     if (!G.winner) {
@@ -460,7 +477,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
             <h1>{GAME_TITLE}</h1>
           </div>
           <ScorePanel G={G} variant={sceneVariant} viewerID={viewerID} />
-          {isMultiplayer && <div className="lg-turn-chip">{turnLabel}</div>}
+          {(isMultiplayer || isBotThinking) && <div className="lg-turn-chip">{turnLabel}</div>}
           <div className="lg-actions">
             <button type="button" onClick={reset}>
               Restart
@@ -504,7 +521,7 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
                 card={card}
                 selected={selectedUid === card.uid}
                 sacrificeMode={mustSacrifice}
-                disabled={isDone || !isViewerTurn}
+                disabled={isDone || !canInteract}
                 onClick={() => handleHandCardClick(card)}
               />
             ))}
@@ -521,19 +538,52 @@ export function LayetBoard({ G, ctx, moves, reset, onExit, onMatchEnd, sceneVari
       </section>
 
       {isDone && (
-        <div className="lg-result">
+        <div className={`lg-result lg-result--${resultTitle.toLowerCase()}`} role="dialog" aria-modal="true" aria-labelledby="match-result-title">
           <div className="lg-result__panel">
-            <p>Match complete</p>
-            <h2>{resultTitle}</h2>
-            <strong>
-              {G.score[viewerID].cards} - {G.score[opponentID].cards}
-            </strong>
-            <small>
-              Power {G.score[viewerID].power} / {G.score[opponentID].power}
-            </small>
-            <button type="button" onClick={reset}>
-              New match
-            </button>
+            <div className="lg-result__flare" aria-hidden="true" />
+            <div className="lg-result__particles" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, index) => <span key={index} />)}
+            </div>
+            <div className="lg-result__content">
+              <p className="lg-result__eyebrow">Duel complete</p>
+              <h2 id="match-result-title">{resultTitle}</h2>
+              <p className="lg-result__message">
+                {resultTitle === 'Victory'
+                  ? 'The arena answers to your command.'
+                  : resultTitle === 'Defeat'
+                    ? 'Reform your deck and return stronger.'
+                    : 'Power held in perfect balance.'}
+              </p>
+
+              <div className="lg-result__score" aria-label={`Final score ${G.score[viewerID].cards} to ${G.score[opponentID].cards}`}>
+                <div className="lg-result__score-side is-player">
+                  <small>You</small>
+                  <strong>{G.score[viewerID].cards}</strong>
+                </div>
+                <span className="lg-result__score-separator">:</span>
+                <div className="lg-result__score-side is-opponent">
+                  <small>Opponent</small>
+                  <strong>{G.score[opponentID].cards}</strong>
+                </div>
+              </div>
+
+              <div className="lg-result__power">
+                <span><small>Your power</small><strong>{G.score[viewerID].power}</strong></span>
+                <i aria-hidden="true" />
+                <span><small>Rival power</small><strong>{G.score[opponentID].power}</strong></span>
+              </div>
+
+              <div className="lg-result__actions">
+                <button className="lg-result__primary" type="button" onClick={reset}>
+                  Play again
+                </button>
+                {onExit && (
+                  <button className="lg-result__secondary" type="button" onClick={onExit}>
+                    Return to arena
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -545,10 +595,9 @@ const LayetClient = Client({
   game: LayetDuel,
   board: LayetBoard,
   numPlayers: 2,
-  playerID: PLAYER_ID,
   debug: false,
 });
 
 export default function LayetGame({ onExit, sceneVariant }) {
-  return <LayetClient onExit={onExit} sceneVariant={sceneVariant} />;
+  return <LayetClient playerID={PLAYER_ID} onExit={onExit} sceneVariant={sceneVariant} />;
 }

@@ -46,6 +46,19 @@ function isActivePlayer(ctx, playerID) {
   return Boolean(playerID && ctx?.currentPlayer === playerID);
 }
 
+function isValidCardUID(cardUid, playerID) {
+  return (
+    typeof cardUid === 'string' &&
+    cardUid.length > 2 &&
+    cardUid.length <= 128 &&
+    cardUid.startsWith(`${playerID}-`)
+  );
+}
+
+function isValidCellIndex(cellIndex) {
+  return Number.isInteger(cellIndex) && cellIndex >= 0 && cellIndex < BOARD_ROWS * BOARD_COLS;
+}
+
 function finishTurnIfReady(G, events) {
   if (G.winner) {
     G.phase = GAME_PHASES.FINISHED;
@@ -60,6 +73,7 @@ function finishTurnIfReady(G, events) {
 
 export const LayetDuelMultiplayer = {
   name: 'layet-vm-board-control-multiplayer',
+  disableUndo: true,
   setup: ({ random }) => {
     const players = createPlayers(random);
 
@@ -102,6 +116,7 @@ export const LayetDuelMultiplayer = {
     sacrificeCard({ G, ctx, playerID }, cardUid) {
       if (G.winner) return INVALID_MOVE;
       if (!isActivePlayer(ctx, playerID)) return INVALID_MOVE;
+      if (!isValidCardUID(cardUid, playerID)) return INVALID_MOVE;
 
       const action = sacrificeFromHand(G, playerID, cardUid);
       if (!action) return INVALID_MOVE;
@@ -113,6 +128,7 @@ export const LayetDuelMultiplayer = {
       if (G.winner) return INVALID_MOVE;
       if (!isActivePlayer(ctx, playerID)) return INVALID_MOVE;
       if (G.sacrificeRequired === playerID) return INVALID_MOVE;
+      if (!isValidCardUID(cardUid, playerID) || !isValidCellIndex(cellIndex)) return INVALID_MOVE;
 
       const action = placeCard(G, playerID, cardUid, cellIndex);
       if (!action) return INVALID_MOVE;

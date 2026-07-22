@@ -10,6 +10,7 @@ const { getSupabaseStatus } = require('./supabase/client');
 const { createRankedResultsApi } = require('./ranked-results');
 const { createPacksApi } = require('./packs-api');
 const { createPlayerApi } = require('./player-api');
+const { createSecurityMiddleware } = require('./security/middleware');
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), quiet: true });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env'), quiet: true });
@@ -30,6 +31,8 @@ const server = Server({
   origins: allowedOrigins,
   apiOrigins: allowedOrigins,
 });
+
+server.app.use(createSecurityMiddleware({ gameName: LayetDuelMultiplayer.name }));
 
 server.app.use(
   createRankedResultsApi({

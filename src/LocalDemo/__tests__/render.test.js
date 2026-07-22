@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import App from '../../App';
-import { LayetBoard } from '../../LayetGame/LayetGame';
+import LayetGame, { LayetBoard } from '../../LayetGame/LayetGame';
 import { LayetDuel, PLAYER_ID, BOT_ID } from '../../LayetGame/game';
 
 test('LayetBoard renders the initial duel shell without throwing', () => {
@@ -21,6 +21,13 @@ test('LayetBoard renders the initial duel shell without throwing', () => {
   expect(html).toContain('Deck');
   expect(html).toContain('Player');
   expect((html.match(/class="lg-hand-card/g) || []).length).toBe(8);
+});
+
+test('AI duel client renders the local player hand face-up', () => {
+  const html = renderToStaticMarkup(<LayetGame sceneVariant="page2" />);
+
+  expect((html.match(/class="lg-hand-card/g) || []).length).toBe(8);
+  expect((html.match(/\/assets\/cards\/generated-filtered\//g) || []).length).toBeGreaterThanOrEqual(8);
 });
 
 test('LayetBoard colors the local viewer blue and the opponent red', () => {

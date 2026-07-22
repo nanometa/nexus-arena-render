@@ -3,6 +3,7 @@ const { normalizeAddress } = require('./onchain/genesisPack');
 const { getSupabaseStatus, supabaseRest } = require('./supabase/client');
 const { ensurePlayer } = require('./packs-api');
 const { buildPlayerDashboard } = require('./player-api');
+const { requireSession, verifyMatchTicket } = require('./security/session');
 
 const MATCHMAKING_MODE = 'matchmaking';
 const MAX_BODY_BYTES = 64 * 1024;
@@ -23,7 +24,7 @@ function setApiCors(ctx, allowedOrigins) {
     ctx.set('Vary', 'Origin');
   }
   ctx.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  ctx.set('Access-Control-Allow-Headers', 'Content-Type');
+  ctx.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 }
 
 function readJSONBody(ctx) {
@@ -72,22 +73,41 @@ function getScore(G, playerID) {
   };
 }
 
-function walletFromPlayer(player, fallbackWalletAddress) {
-  return normalizeAddress(player?.data?.walletAddress || fallbackWalletAddress || '');
+function walletFromPlayer(player, { matchID, playerID, mode }) {
+  const walletAddress = normalizeAddress(player?.data?.walletAddress || '');
+  if (!walletAddress || !player?.data?.identityTicket) {
+    throw Object.assign(new Error('Verified player identity is missing'), { status: 403 });
+  }
+  verifyMatchTicket(player.data.identityTicket, {
+    walletAddress,
+    matchID,
+    playerID,
+    mode,
+  });
+  return walletAddress;
 }
 
 function buildResultPayload({ matchID, state, metadata, log, submitterPlayerID, submitterWalletAddress }) {
   const G = state?.G;
   const player0 = getPlayer(metadata, '0') || {};
   const player1 = getPlayer(metadata, '1') || {};
-  const player0Wallet = walletFromPlayer(
-    player0,
-    submitterPlayerID === '0' ? submitterWalletAddress : ''
-  );
-  const player1Wallet = walletFromPlayer(
-    player1,
-    submitterPlayerID === '1' ? submitterWalletAddress : ''
-  );
+  const player0Wallet = walletFromPlayer(player0, {
+    matchID,
+    playerID: '0',
+    mode: MATCHMAKING_MODE,
+  });
+  const player1Wallet = walletFromPlayer(player1, {
+    matchID,
+    playerID: '1',
+    mode: MATCHMAKING_MODE,
+  });
+  if (player0Wallet === player1Wallet) {
+    throw Object.assign(new Error('Ranked self-play is not allowed'), { status: 403 });
+  }
+  const submitterWallet = submitterPlayerID === '0' ? player0Wallet : player1Wallet;
+  if (submitterWallet !== submitterWalletAddress) {
+    throw Object.assign(new Error('Wallet session does not own this player seat'), { status: 403 });
+  }
   const player0Score = getScore(G, '0');
   const player1Score = getScore(G, '1');
   const playedAt = Math.floor(Date.now() / 1000);
@@ -166,6 +186,14 @@ async function fetchPersistentLeaderboard() {
   } catch (error) {
     return null;
   }
+}
+
+async function fetchPersistentMatch(matchID) {
+  if (!getSupabaseStatus().enabled) return null;
+  const rows = await supabaseRest(
+    `matches?match_id=eq.${encodeURIComponent(matchID)}&select=*&limit=1`
+  ).catch(() => []);
+  return rows[0] || null;
 }
 
 async function upsertPersistentLeaderboardEntry({ playerID, player, score, opponentScore, winner, playedAt }) {
@@ -340,6 +368,7 @@ function serializeLeaderboard(leaderboard) {
 
 function createRankedResultsApi({ gameName, allowedOrigins }) {
   const recordedResults = new Map();
+  const processingResults = new Set();
   const leaderboard = new Map();
 
   return async function rankedResultsApi(ctx, next) {
@@ -366,12 +395,21 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
     }
 
     if (ctx.path === '/api/ranked-match-results' && ctx.method === 'POST') {
+      let lockedMatchID = '';
       try {
+        const session = requireSession(ctx);
         const body = await readJSONBody(ctx);
         const matchID = String(body.matchID || '').trim();
         const playerID = String(body.playerID ?? '');
         const credentials = body.credentials;
-        const submitterWalletAddress = normalizeAddress(body.walletAddress || '');
+        const submittedWalletAddress = normalizeAddress(body.walletAddress || '');
+        const submitterWalletAddress = session.walletAddress;
+
+        if (submittedWalletAddress && submittedWalletAddress !== submitterWalletAddress) {
+          ctx.status = 403;
+          ctx.body = { error: 'Wallet session does not match submitted wallet' };
+          return;
+        }
 
         if (!matchID) {
           ctx.status = 400;
@@ -441,6 +479,28 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
           return;
         }
 
+        if (processingResults.has(matchID)) {
+          ctx.status = 409;
+          ctx.body = { error: 'Match result is already being recorded' };
+          return;
+        }
+        processingResults.add(matchID);
+        lockedMatchID = matchID;
+
+        const persistentMatch = await fetchPersistentMatch(matchID);
+        if (persistentMatch) {
+          const persistentLeaderboard = await fetchPersistentLeaderboard();
+          const dashboard = await buildPlayerDashboard(submitterWalletAddress).catch(() => null);
+          processingResults.delete(matchID);
+          lockedMatchID = '';
+          ctx.body = {
+            result: { matchID, alreadyRecorded: true, persistent: true },
+            dashboard,
+            leaderboard: persistentLeaderboard || serializeLeaderboard(leaderboard),
+          };
+          return;
+        }
+
         const result = buildResultPayload({
           matchID,
           state,
@@ -473,6 +533,8 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
           ? await buildPlayerDashboard(submitterWalletAddress).catch(() => null)
           : null;
 
+        processingResults.delete(matchID);
+        lockedMatchID = '';
         ctx.body = {
           result,
           dashboard,
@@ -480,6 +542,7 @@ function createRankedResultsApi({ gameName, allowedOrigins }) {
         };
         return;
       } catch (error) {
+        if (lockedMatchID) processingResults.delete(lockedMatchID);
         ctx.status = error.status || 500;
         ctx.body = { error: error.message || 'Ranked result registration failed' };
         return;
