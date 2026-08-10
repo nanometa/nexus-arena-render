@@ -2,26 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import profileFrame from '../assets/branding/nexus-profile-frame.png';
 import gameEmblem from '../assets/branding/game-emblem.png';
-import { fetchPlayerDashboard } from '../LayetGame/packApi';
+import { fetchLeaderboard, fetchPlayerDashboard, updatePlayerProfile } from '../LayetGame/packApi';
 import { defaultPilotName, shortAddress } from '../LayetGame/genesisPackClient';
-import { useWalletLogin } from '../components/web3/useWalletLogin';
 import { useNexusStore } from '../store/useNexusStore';
 import { useToastStore } from '../store/useToastStore';
 
-const GAME_SERVER_URL = process.env.REACT_APP_GAME_SERVER_URL || 'http://localhost:8000';
-
 async function fetchLeaderboardEntries() {
-  const response = await fetch(`${GAME_SERVER_URL}/api/leaderboard`);
-  if (!response.ok) throw new Error('Leaderboard offline');
-  const data = await response.json();
-  return Array.isArray(data.leaderboard) ? data.leaderboard : [];
+  return fetchLeaderboard();
 }
 
 export default function ProfilePage() {
   const playerAccount = useNexusStore((state) => state.playerAccount);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const pushToast = useToastStore((state) => state.pushToast);
-  const { connectAndSign, isPending } = useWalletLogin();
+  const [isPending, setIsPending] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(
@@ -54,15 +48,22 @@ export default function ProfilePage() {
       pushToast({ title: 'Pilot name', message: 'Use at least 3 characters.' });
       return;
     }
+    setIsPending(true);
     try {
-      await connectAndSign(cleanName.slice(0, 18));
+      const dashboard = await updatePlayerProfile({
+        walletAddress,
+        displayName: cleanName.slice(0, 18),
+      });
+      setPlayerAccount({ ...dashboard, authenticated: true });
       await fetchLeaderboardEntries()
         .then(setLeaderboard)
         .catch(() => null);
       setEditing(false);
       pushToast({ title: 'Pilot profile', message: 'Pilot name saved to this wallet.' });
     } catch (error) {
-      // The wallet hook already reports signature errors.
+      pushToast({ title: 'Pilot profile', message: error.message || 'Name update failed.' });
+    } finally {
+      setIsPending(false);
     }
   };
 

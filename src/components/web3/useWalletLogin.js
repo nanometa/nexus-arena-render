@@ -1,14 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { isAddress } from 'viem';
-import { useAccount, useConnect, useSignMessage, useSwitchChain } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import {
   LITVM_CHAIN_ID,
-  createWalletLoginMessage,
-  defaultPilotName,
-  hasWalletProvider,
   walletErrorMessage,
 } from '../../LayetGame/genesisPackClient';
-import { createPlayerSession, warmGameServer } from '../../LayetGame/packApi';
+import { createPlayerSession } from '../../LayetGame/packApi';
+import { signInWithWallet } from '../../lib/supabaseClient';
 import { useNexusStore } from '../../store/useNexusStore';
 import { useToastStore } from '../../store/useToastStore';
 
@@ -26,29 +24,21 @@ function loginErrorMessage(error) {
 }
 
 export function useWalletLogin() {
-  const { address, chainId } = useAccount();
-  const { connectAsync, connectors, isPending } = useConnect();
-  const { signMessageAsync } = useSignMessage();
+  const { address, chainId, connector: connectedConnector } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const pushToast = useToastStore((state) => state.pushToast);
 
-  const connectAndSign = async (displayName = '') => {
+  const connectAndSign = useCallback(async (displayName = '') => {
     setIsAuthenticating(true);
-    const serverReady = warmGameServer();
 
     try {
-      if (!hasWalletProvider()) {
-        throw new Error('Install MetaMask or another EVM wallet.');
-      }
+      const walletAddress = address;
+      const walletConnector = connectedConnector;
 
-      let walletAddress = address;
-      if (!walletAddress) {
-        const connector = connectors[0];
-        if (!connector) throw new Error('No injected wallet connector found.');
-        const result = await connectAsync({ connector, chainId: LITVM_CHAIN_ID });
-        walletAddress = result.accounts?.[0];
+      if (!walletAddress || !walletConnector) {
+        throw new Error('Choose a wallet in the Nexus Arena connection window.');
       }
 
       if (chainId && chainId !== LITVM_CHAIN_ID) {
@@ -60,18 +50,14 @@ export function useWalletLogin() {
       }
 
       const requestedName = String(displayName || '').trim().slice(0, 18);
-      const resolvedDisplayName = requestedName || defaultPilotName(walletAddress);
-      const message = createWalletLoginMessage({
-        walletAddress,
-        displayName: resolvedDisplayName,
-      });
-      const signature = await signMessageAsync({ message, account: walletAddress });
-      await serverReady;
+      const walletProvider = await walletConnector?.getProvider?.();
+      if (!walletProvider?.request) {
+        throw new Error('The selected wallet provider is unavailable. Reconnect your wallet.');
+      }
+      await signInWithWallet(walletProvider, walletAddress);
       const dashboard = await createPlayerSession({
         walletAddress,
         displayName: requestedName,
-        message,
-        signature,
       });
 
       setPlayerAccount({ ...dashboard, authenticated: true });
@@ -88,10 +74,17 @@ export function useWalletLogin() {
     } finally {
       setIsAuthenticating(false);
     }
-  };
+  }, [
+    address,
+    chainId,
+    connectedConnector,
+    pushToast,
+    setPlayerAccount,
+    switchChainAsync,
+  ]);
 
   return {
     connectAndSign,
-    isPending: isPending || isAuthenticating,
+    isPending: isAuthenticating,
   };
 }

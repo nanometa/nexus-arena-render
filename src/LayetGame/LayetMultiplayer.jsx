@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Client } from 'boardgame.io/react';
-import { LobbyClient } from 'boardgame.io/client';
-import { Local, SocketIO } from 'boardgame.io/multiplayer';
+import { Local } from 'boardgame.io/multiplayer';
 import LayetGame, { LayetBoard } from './LayetGame';
 import { LayetDuelMultiplayer } from './game.multiplayer';
 import { BOT_ID, PLAYER_ID } from './game';
@@ -12,30 +11,35 @@ import {
   mintGenesisPack,
   openGenesisPack,
   readDropState,
-  signWalletLogin,
   shortAddress,
   walletErrorMessage,
 } from './genesisPackClient';
+import { signInWithWallet } from '../lib/supabaseClient';
 import {
   createPlayerSession,
+  cancelRoom,
+  createPrivateRoom,
+  fetchGameView,
+  fetchLeaderboard,
   fetchPlayerDashboard,
   fetchPackStatus,
-  requestMatchTicket,
+  fetchRoom,
+  joinMatchmaking,
+  joinPrivateRoom,
   registerPackMint,
   registerPackOpen,
+  sendGameMove,
+  subscribeToGameView,
+  subscribeToRoom,
 } from './packApi';
 import genesisPackArt from './assets/packs/nexus-genesis-pack.png';
 import gameEmblem from '../assets/branding/game-emblem.png';
 
-const GAME_NAME = LayetDuelMultiplayer.name;
 const GAME_TITLE = 'NEXUS ARENA';
-const GAME_SERVER_URL = process.env.REACT_APP_GAME_SERVER_URL || 'http://localhost:8000';
 const MATCHMAKING_SETUP = { mode: 'matchmaking' };
 const LEADERBOARD_STORAGE_KEY = 'nexus-arena-matchmaking-leaderboard-v1';
-const RECORDED_MATCHES_STORAGE_KEY = 'nexus-arena-recorded-match-results-v1';
 const PLAYER_ACCOUNT_STORAGE_KEY = 'nexus-arena-player-account-v1';
 const localMultiplayer = Local();
-const socketMultiplayer = SocketIO({ server: GAME_SERVER_URL });
 
 const LocalPreviewClient = Client({
   game: LayetDuelMultiplayer,
@@ -45,13 +49,6 @@ const LocalPreviewClient = Client({
   debug: false,
 });
 
-const OnlineClient = Client({
-  game: LayetDuelMultiplayer,
-  board: LayetBoard,
-  numPlayers: 2,
-  multiplayer: socketMultiplayer,
-  debug: false,
-});
 
 function normalizeRoomCode(value) {
   return value.trim();
@@ -64,47 +61,6 @@ function multiplayerErrorMessage(error) {
   return 'Multiplayer server unavailable';
 }
 
-function isMatchmakingRoom(match) {
-  return match?.setupData?.mode === MATCHMAKING_SETUP.mode;
-}
-
-function hasFreeSeat(match) {
-  return Boolean(match?.players?.some((player) => !player.name));
-}
-
-function freeSeatID(match) {
-  const seat = match?.players?.find((player) => !player.name);
-  return seat?.id === undefined ? '' : String(seat.id);
-}
-
-function authenticatedRequest(sessionToken) {
-  return {
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-  };
-}
-
-function isJoinConflict(error) {
-  return error?.message?.includes('409') || String(error?.details || '').includes('not available');
-}
-
-async function findOpenMatchmakingRoom(lobbyClient) {
-  const { matches } = await lobbyClient.listMatches(GAME_NAME, { isGameover: false });
-  return matches
-    .filter((match) => isMatchmakingRoom(match) && hasFreeSeat(match))
-    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0];
-}
-
-function createSession(matchID, joinResult, playerName, mode, walletAddress, sessionToken) {
-  return {
-    matchID,
-    playerID: joinResult.playerID,
-    credentials: joinResult.playerCredentials,
-    playerName,
-    mode,
-    walletAddress,
-    sessionToken,
-  };
-}
 
 function readStorageArray(key) {
   if (typeof window === 'undefined') return [];
@@ -271,12 +227,10 @@ function GenesisPackPanel({ playerName, playerAccount, onInventoryReady, onPlaye
     try {
       const address = await connectWallet();
       setMessage('Sign wallet login to load your Nexus profile...');
-      const signedLogin = await signWalletLogin({ walletAddress: address, displayName: playerName });
+      await signInWithWallet();
       const dashboard = await createPlayerSession({
         walletAddress: address,
         displayName: playerName,
-        message: signedLogin.message,
-        signature: signedLogin.signature,
       });
       applyDashboard(dashboard);
       await loadDrop(address);
@@ -573,75 +527,7 @@ function MatchHistoryPanel({ account }) {
 }
 
 async function fetchServerLeaderboard() {
-  const response = await fetch(`${GAME_SERVER_URL}/api/leaderboard`);
-  if (!response.ok) throw new Error('Leaderboard unavailable');
-  const data = await response.json();
-  return Array.isArray(data.leaderboard) ? data.leaderboard : [];
-}
-
-async function submitRankedMatchResult(session) {
-  const response = await fetch(`${GAME_SERVER_URL}/api/ranked-match-results`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(session.sessionToken ? { Authorization: `Bearer ${session.sessionToken}` } : {}),
-    },
-    body: JSON.stringify({
-      matchID: session.matchID,
-      playerID: session.playerID,
-      credentials: session.credentials,
-      walletAddress: session.walletAddress,
-    }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Ranked result registration failed');
-  if (Array.isArray(data.leaderboard)) writeLocalLeaderboard(data.leaderboard);
-  return data;
-}
-
-function recordLocalMatchmakingFallback(session, summary) {
-  if (session?.mode !== MATCHMAKING_SETUP.mode || !summary?.winner) return;
-
-  const resultKey = `${session.matchID}:${session.playerID}:${summary.winner}`;
-  const recordedMatches = readStorageArray(RECORDED_MATCHES_STORAGE_KEY);
-  if (recordedMatches.includes(resultKey)) return;
-  writeStorageArray(RECORDED_MATCHES_STORAGE_KEY, [...recordedMatches, resultKey].slice(-100));
-
-  const playerName = session.playerName || `Player ${Number(session.playerID) + 1}`;
-  const leaderboard = readStorageArray(LEADERBOARD_STORAGE_KEY);
-  const existing = leaderboard.find(
-    (entry) => entry.name.toLowerCase() === playerName.toLowerCase()
-  );
-  const entry =
-    existing ||
-    {
-      name: playerName,
-      games: 0,
-      wins: 0,
-      losses: 0,
-      draws: 0,
-      points: 0,
-      powerFor: 0,
-      powerAgainst: 0,
-      lastPlayedAt: null,
-    };
-
-  const isDraw = summary.winner === 'draw';
-  const won = summary.winner === session.playerID;
-  entry.games = (entry.games || 0) + 1;
-  entry.wins = (entry.wins || 0) + (won ? 1 : 0);
-  entry.losses = (entry.losses || 0) + (!won && !isDraw ? 1 : 0);
-  entry.draws = (entry.draws || 0) + (isDraw ? 1 : 0);
-  entry.points = entry.wins * 3 + entry.draws;
-  entry.powerFor = (entry.powerFor || 0) + (summary.viewerScore?.power || 0);
-  entry.powerAgainst = (entry.powerAgainst || 0) + (summary.opponentScore?.power || 0);
-  entry.lastPlayedAt = Date.now();
-
-  const nextLeaderboard = existing
-    ? leaderboard.map((candidate) => (candidate === existing ? entry : candidate))
-    : [...leaderboard, entry];
-
-  writeStorageArray(LEADERBOARD_STORAGE_KEY, nextLeaderboard);
+  return fetchLeaderboard();
 }
 
 function LayetMultiplayerLobby({
@@ -655,7 +541,6 @@ function LayetMultiplayerLobby({
   onCanPlayChange,
   lobbyVariant = 'full',
 }) {
-  const lobbyClient = useMemo(() => new LobbyClient({ server: GAME_SERVER_URL }), []);
   const [playerName, setPlayerName] = useState('Player');
   const [roomCode, setRoomCode] = useState('');
   const [status, setStatus] = useState('');
@@ -704,56 +589,15 @@ function LayetMultiplayerLobby({
     setBusy(true);
     setStatus('Searching opponent...');
     try {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const openMatch = await findOpenMatchmakingRoom(lobbyClient);
-        if (!openMatch) break;
-
-        try {
-          const playerID = freeSeatID(openMatch);
-          if (!playerID) continue;
-          const ticket = await requestMatchTicket({
-            sessionToken,
-            matchID: openMatch.matchID,
-            playerID,
-            mode: 'matchmaking',
-          });
-          const joinResult = await lobbyClient.joinMatch(GAME_NAME, openMatch.matchID, {
-            playerID,
-            playerName: cleanPlayerName,
-            data: {
-              mode: MATCHMAKING_SETUP.mode,
-              walletAddress: ticket.walletAddress,
-              identityTicket: ticket.identityTicket,
-            },
-          }, authenticatedRequest(sessionToken));
-          onJoinOnline(createSession(openMatch.matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress, sessionToken));
-          return;
-        } catch (error) {
-          if (!isJoinConflict(error)) throw error;
-        }
-      }
-
-      const { matchID } = await lobbyClient.createMatch(GAME_NAME, {
-        numPlayers: 2,
-        setupData: MATCHMAKING_SETUP,
-      }, authenticatedRequest(sessionToken));
-      const ticket = await requestMatchTicket({
-        sessionToken,
-        matchID,
-        playerID: PLAYER_ID,
-        mode: 'matchmaking',
-      });
-      const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
-        playerID: PLAYER_ID,
+      const result = await joinMatchmaking();
+      const nextSession = {
+        ...result.session,
         playerName: cleanPlayerName,
-        data: {
-          mode: MATCHMAKING_SETUP.mode,
-          walletAddress: ticket.walletAddress,
-          identityTicket: ticket.identityTicket,
-        },
-      }, authenticatedRequest(sessionToken));
-
-      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'matchmaking', walletAddress, sessionToken));
+        walletAddress,
+        sessionToken,
+      };
+      if (result.room?.status === 'playing') onJoinOnline(nextSession);
+      else onWaitForOpponent(nextSession);
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -774,28 +618,13 @@ function LayetMultiplayerLobby({
     setBusy(true);
     setStatus('Creating private room...');
     try {
-      const { matchID } = await lobbyClient.createMatch(GAME_NAME, {
-        numPlayers: 2,
-        setupData: { mode: 'private' },
-        unlisted: true,
-      }, authenticatedRequest(sessionToken));
-      const ticket = await requestMatchTicket({
-        sessionToken,
-        matchID,
-        playerID: PLAYER_ID,
-        mode: 'private',
-      });
-      const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
-        playerID: PLAYER_ID,
+      const result = await createPrivateRoom();
+      onWaitForOpponent({
+        ...result.session,
         playerName: cleanPlayerName,
-        data: {
-          mode: 'private',
-          walletAddress: ticket.walletAddress,
-          identityTicket: ticket.identityTicket,
-        },
-      }, authenticatedRequest(sessionToken));
-
-      onWaitForOpponent(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress, sessionToken));
+        walletAddress,
+        sessionToken,
+      });
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -823,30 +652,13 @@ function LayetMultiplayerLobby({
     setBusy(true);
     setStatus('Joining room...');
     try {
-      const match = await lobbyClient.getMatch(
-        GAME_NAME,
-        matchID,
-        authenticatedRequest(sessionToken)
-      );
-      const playerID = freeSeatID(match);
-      if (!playerID) throw new Error('Room is full');
-      const ticket = await requestMatchTicket({
-        sessionToken,
-        matchID,
-        playerID,
-        mode: 'private',
-      });
-      const joinResult = await lobbyClient.joinMatch(GAME_NAME, matchID, {
-        playerID,
+      const result = await joinPrivateRoom(matchID);
+      onJoinOnline({
+        ...result.session,
         playerName: cleanPlayerName,
-        data: {
-          mode: 'private',
-          walletAddress: ticket.walletAddress,
-          identityTicket: ticket.identityTicket,
-        },
-      }, authenticatedRequest(sessionToken));
-
-      onJoinOnline(createSession(matchID, joinResult, cleanPlayerName, 'private', walletAddress, sessionToken));
+        walletAddress,
+        sessionToken,
+      });
     } catch (error) {
       setStatus(multiplayerErrorMessage(error));
     } finally {
@@ -1077,44 +889,48 @@ function LayetMultiplayerLobby({
 }
 
 function MatchmakingWaiting({ session, onMatched, onCancel }) {
-  const lobbyClient = useMemo(() => new LobbyClient({ server: GAME_SERVER_URL }), []);
   const [status, setStatus] = useState('Waiting for opponent...');
   const [canceling, setCanceling] = useState(false);
   const isPrivateRoom = session.mode === 'private';
 
   useEffect(() => {
     let active = true;
-    let intervalID;
-
-    const checkMatch = async () => {
-      try {
-        const match = await lobbyClient.getMatch(GAME_NAME, session.matchID);
-        if (!active) return;
-        if (!hasFreeSeat(match)) {
-          onMatched(session);
-          return;
-        }
+    const handleRoom = (room) => {
+      if (!active) return;
+      if (room?.status === 'playing') {
+        onMatched(session);
+      } else if (room?.status === 'canceled') {
+        onCancel();
+      } else {
         setStatus('Waiting for opponent...');
+      }
+    };
+    const checkRoom = async () => {
+      try {
+        const result = await fetchRoom(session.matchID);
+        handleRoom(result.room);
       } catch (error) {
         if (active) setStatus(multiplayerErrorMessage(error));
       }
     };
-
-    checkMatch();
-    intervalID = window.setInterval(checkMatch, 1400);
+    checkRoom();
+    const unsubscribe = subscribeToRoom(
+      session.matchID,
+      handleRoom,
+      () => setStatus('Realtime reconnecting...')
+    );
+    const intervalID = window.setInterval(checkRoom, 5000);
     return () => {
       active = false;
       window.clearInterval(intervalID);
+      unsubscribe();
     };
-  }, [lobbyClient, onMatched, session]);
+  }, [onCancel, onMatched, session]);
 
   const cancelMatchmaking = async () => {
     setCanceling(true);
     try {
-      await lobbyClient.leaveMatch(GAME_NAME, session.matchID, {
-        playerID: session.playerID,
-        credentials: session.credentials,
-      });
+      await cancelRoom(session.matchID);
     } catch (error) {
       // Leaving is best-effort; returning to lobby matters more for this preview.
     } finally {
@@ -1226,6 +1042,98 @@ function LocalPreviewMatch({ onBackToLobby }) {
   );
 }
 
+function SupabaseOnlineMatch({
+  session,
+  onExit,
+  onMatchEnd,
+  onResultPrimary,
+  onResultSecondary,
+  resultPrimaryLabel,
+  resultSecondaryLabel,
+}) {
+  const [gameState, setGameState] = useState(null);
+  const [status, setStatus] = useState('Synchronizing duel...');
+
+  useEffect(() => {
+    let active = true;
+    let retryID;
+    const loadView = async () => {
+      try {
+        const row = await fetchGameView(session.matchID, session.playerID);
+        if (active) {
+          setGameState(row.state);
+          setStatus('');
+        }
+      } catch (error) {
+        if (!active) return;
+        setStatus('Waiting for secure game state...');
+        retryID = window.setTimeout(loadView, 1200);
+      }
+    };
+    loadView();
+    const unsubscribe = subscribeToGameView(
+      session.matchID,
+      session.playerID,
+      (row) => {
+        if (!active) return;
+        setGameState(row.state);
+        setStatus('');
+      },
+      () => setStatus('Realtime reconnecting...')
+    );
+    return () => {
+      active = false;
+      window.clearTimeout(retryID);
+      unsubscribe();
+    };
+  }, [session.matchID, session.playerID]);
+
+  const moves = useMemo(() => {
+    const dispatch = (move, args = {}) => {
+      sendGameMove(session.matchID, move, args)
+        .then((result) => {
+          if (result?.state) setGameState(result.state);
+        })
+        .catch((error) => setStatus(multiplayerErrorMessage(error)));
+    };
+    return {
+      drawCard: () => dispatch('drawCard'),
+      sacrificeCard: (cardUid) => dispatch('sacrificeCard', { cardUid }),
+      playCard: (cardUid, cellIndex) => dispatch('playCard', { cardUid, cellIndex }),
+      surrender: () => dispatch('surrender'),
+      botPlay: () => {},
+    };
+  }, [session.matchID]);
+
+  if (!gameState) {
+    return (
+      <main className="layet-multiplayer-lobby nexus-waiting-screen nexus-waiting-screen--ranked">
+        <section className="nexus-waiting-gate">
+          <p className="layet-multiplayer-lobby__eyebrow">Secure battle state</p>
+          <h1>{status || 'Synchronizing duel...'}</h1>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <LayetBoard
+      G={gameState}
+      ctx={{ currentPlayer: gameState.currentPlayer, gameover: gameState.winner || undefined }}
+      moves={moves}
+      reset={() => {}}
+      playerID={String(session.playerID)}
+      sceneVariant="page2"
+      onExit={onExit}
+      onMatchEnd={onMatchEnd}
+      onResultPrimary={onResultPrimary}
+      onResultSecondary={onResultSecondary}
+      resultPrimaryLabel={resultPrimaryLabel}
+      resultSecondaryLabel={resultSecondaryLabel}
+    />
+  );
+}
+
 export default function LayetMultiplayer({
   onExit,
   playerAccountOverride,
@@ -1306,25 +1214,18 @@ export default function LayetMultiplayer({
       }
     };
 
-    const handleMatchEnd = (summary) => {
-      if (session.mode === MATCHMAKING_SETUP.mode) {
-        submitRankedMatchResult(session)
-          .then((data) => {
-            if (data.dashboard) updatePlayerAccount(data.dashboard);
-          })
-          .catch(() => {
-            recordLocalMatchmakingFallback(session, summary);
-          });
-      }
+    const handleMatchEnd = () => {
+      window.setTimeout(() => {
+        fetchPlayerDashboard(session.walletAddress)
+          .then((dashboard) => updatePlayerAccount({ ...dashboard, authenticated: true }))
+          .catch(() => null);
+      }, 500);
     };
 
     return (
       <div className="layet-multiplayer">
-        <OnlineClient
-          matchID={session.matchID}
-          playerID={session.playerID}
-          credentials={session.credentials}
-          sceneVariant="page2"
+        <SupabaseOnlineMatch
+          session={session}
           onExit={returnToArena}
           onMatchEnd={handleMatchEnd}
           onResultPrimary={returnToArena}

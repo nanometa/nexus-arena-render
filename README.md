@@ -1,6 +1,7 @@
 # Nexus Arena
 
-Nexus Arena is a full-screen board-control card game prototype built with React, boardgame.io, Supabase, and an EVM testnet pack flow.
+Nexus Arena is a full-screen Web3 board-control card game built with React,
+boardgame.io, Supabase, and an EVM testnet Genesis Pack flow.
 
 ## Current Focus
 
@@ -15,10 +16,9 @@ Nexus Arena is a full-screen board-control card game prototype built with React,
 
 - React 18
 - boardgame.io
-- Node.js API server
-- Supabase database
+- Supabase Auth, Postgres, Realtime, and Edge Functions
+- Cloudflare Pages
 - Solidity contracts
-- Render deployment
 
 ## Local Development
 
@@ -34,7 +34,7 @@ Run the web app:
 npm start
 ```
 
-Run the multiplayer/API server:
+Run the legacy Node server only when testing historical server code:
 
 ```bash
 npm run server
@@ -49,19 +49,24 @@ npm run build
 ## Project Structure
 
 - `src/LayetGame` - Nexus Arena game UI, multiplayer client, pack client, and card logic
-- `server` - boardgame.io server, pack API, Supabase writes, ranked result handling
+- `server` - legacy Node implementation and its security regression tests
 - `contracts` - Genesis Pack and match registry contracts
-- `supabase` - database schema
+- `supabase/functions/nexus-api` - authoritative pack, profile, room, and match API
+- `supabase/functions/_shared` - server-authoritative 4x4 game engine
+- `supabase/migrations` - additive database and Realtime migrations
 - `public/assets` - runtime game assets
 - `assets` - source art and working asset library
 - `scripts` - deployment, seeding, and asset preparation scripts
 
-## Deployment
+## Production Deployment
 
-The Render deployment uses:
+- `nexusarena.pro` is served by Cloudflare Pages.
+- Supabase Web3 Auth uses the connected wallet as the persistent identity.
+- The `nexus-api` Edge Function validates pack receipts and every online move.
+- Supabase Realtime broadcasts a different redacted game view to each player.
+- Existing players, packs, opened inventories, matches, and leaderboard rows are
+  preserved by the additive migration.
 
-- Web service for the React build
-- API service for multiplayer, packs, and ranked result endpoints
-- Supabase for persistent player, pack, inventory, and leaderboard data
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the exact setup and verification steps.
 
 This repository is Nexus-only and does not include the old legacy card-game frontend.

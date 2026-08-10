@@ -8,7 +8,12 @@ import ProfilePage from '../pages/ProfilePage';
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_relativeSplatPath: true,
+        v7_startTransition: true,
+      }}
+    >
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />

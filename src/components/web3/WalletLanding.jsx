@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
 import connectWalletLabel from '../../assets/branding/connect-wallet-label.svg';
 import connectingWalletLabel from '../../assets/branding/connecting-wallet-label.svg';
 import nexusArenaWordmark from '../../assets/branding/nexus-arena-wordmark.svg';
@@ -11,13 +13,16 @@ import { useWalletLogin } from './useWalletLogin';
 
 export default function WalletLanding() {
   const { connectAndSign, isPending } = useWalletLogin();
+  const { address, isConnected } = useAccount();
+  const { connectModalOpen, openConnectModal } = useConnectModal();
   const [busy, setBusy] = useState(false);
+  const loginRequestedRef = useRef(false);
 
   useEffect(() => {
     void warmGameServer();
   }, []);
 
-  const handleConnect = async () => {
+  const authenticateWallet = useCallback(async () => {
     setBusy(true);
     try {
       await connectAndSign();
@@ -26,6 +31,21 @@ export default function WalletLanding() {
     } finally {
       setBusy(false);
     }
+  }, [connectAndSign]);
+
+  useEffect(() => {
+    if (!loginRequestedRef.current || !isConnected || !address) return;
+    loginRequestedRef.current = false;
+    void authenticateWallet();
+  }, [address, authenticateWallet, isConnected]);
+
+  const handleConnect = async () => {
+    if (!isConnected) {
+      loginRequestedRef.current = true;
+      openConnectModal?.();
+      return;
+    }
+    await authenticateWallet();
   };
 
   return (
@@ -73,7 +93,7 @@ export default function WalletLanding() {
           whileTap={{ scale: 0.98 }}
           transition={{ delay: 0.58, duration: 0.55 }}
           onClick={handleConnect}
-          disabled={busy || isPending}
+          disabled={busy || isPending || connectModalOpen}
           aria-label={busy || isPending ? 'Connecting wallet' : 'Connect wallet'}
           className="nexus-ccg-button mt-8 border border-gold/70 bg-white/10 px-8 py-4 shadow-premium backdrop-blur-xl transition hover:bg-white/15 disabled:cursor-wait disabled:opacity-60"
         >

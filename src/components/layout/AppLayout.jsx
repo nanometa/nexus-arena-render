@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAccount } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import ToastViewport from '../feedback/ToastViewport';
 import WalletLanding from '../web3/WalletLanding';
 import nexusArenaWordmark from '../../assets/branding/nexus-arena-wordmark.svg';
@@ -12,6 +12,8 @@ import profileBackground from '../../assets/backgrounds/nexus-profile-v1.png';
 import { CARD_CATALOG } from '../../LayetGame/cards.generated';
 import { defaultPilotName, shortAddress } from '../../LayetGame/genesisPackClient';
 import { useNexusStore } from '../../store/useNexusStore';
+import { createPlayerSession } from '../../LayetGame/packApi';
+import { signOutWalletSession, supabase, walletFromSupabaseUser } from '../../lib/supabaseClient';
 
 const navItems = [
   { to: '/', label: 'Hub', meta: 'Command' },
@@ -50,6 +52,7 @@ function ClientNav({ className = '' }) {
 export default function AppLayout() {
   const location = useLocation();
   const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
   const playerAccount = useNexusStore((state) => state.playerAccount);
   const setPlayerAccount = useNexusStore((state) => state.setPlayerAccount);
   const clearPlayerAccount = useNexusStore((state) => state.clearPlayerAccount);
@@ -81,14 +84,38 @@ export default function AppLayout() {
   }, [isLocalPreview, playerAccount?.authenticated, setPlayerAccount]);
 
   useEffect(() => {
+    if (isLocalPreview || isAuthenticated) return;
+    let active = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const walletAddress = walletFromSupabaseUser(data.session?.user);
+      if (!active || !walletAddress) return;
+      try {
+        const dashboard = await createPlayerSession({ walletAddress });
+        if (active) setPlayerAccount({ ...dashboard, authenticated: true });
+      } catch (error) {
+        // A stale Supabase session is handled by the normal connect screen.
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isLocalPreview, setPlayerAccount]);
+
+  useEffect(() => {
     if (isLocalPreview) return;
     if (!isAuthenticated) return;
     const activeWallet = String(address || '').toLowerCase();
     const sessionWallet = String(playerAccount?.walletAddress || '').toLowerCase();
-    if (!isConnected || !activeWallet || activeWallet !== sessionWallet) {
+    if (isConnected && activeWallet && activeWallet !== sessionWallet) {
       clearPlayerAccount();
     }
   }, [address, clearPlayerAccount, isAuthenticated, isConnected, isLocalPreview, playerAccount?.walletAddress]);
+
+  const disconnectSession = async () => {
+    await signOutWalletSession().catch(() => null);
+    disconnect();
+    clearPlayerAccount();
+  };
 
   if (!isAuthenticated) {
     return (
@@ -120,7 +147,7 @@ export default function AppLayout() {
             <strong>{inventoryCount}</strong>
             <span>/20</span>
           </div>
-          <button type="button" onClick={clearPlayerAccount} aria-label="Disconnect wallet session">
+          <button type="button" onClick={disconnectSession} aria-label="Disconnect wallet session">
             Exit
           </button>
         </div>

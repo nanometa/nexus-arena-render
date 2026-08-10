@@ -61,7 +61,11 @@
   min-height: 100dvh;
   padding: 0;
   overflow: hidden;
-  background: #000;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.34), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.34)),
+    linear-gradient(180deg, rgba(1, 4, 10, 0.08), rgba(1, 4, 10, 0.38)),
+    url('./assets/backgrounds/layet-vm-page2-environment-v1.png') center / cover no-repeat,
+    #02050a;
   overscroll-behavior: none;
   touch-action: none;
 }
@@ -1125,8 +1129,8 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 100vw;
-  height: 100dvh;
+  width: var(--page2-stage-w);
+  height: var(--page2-stage-h);
   padding: 0;
   border: 0;
   overflow: hidden;
@@ -1135,7 +1139,7 @@
   background:
     radial-gradient(circle at 50% 48%, rgba(72, 208, 255, 0.12), transparent 34%),
     linear-gradient(180deg, rgba(3, 7, 11, 0.06), rgba(3, 7, 11, 0.32)),
-    url('./assets/backgrounds/layet-vm-page2-environment-v1.png') center / cover no-repeat,
+    url('./assets/backgrounds/layet-vm-page2-environment-v1.png') center / 100% 100% no-repeat,
     #05090d;
   box-shadow: none;
   backdrop-filter: none;

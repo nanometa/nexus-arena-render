@@ -340,7 +340,7 @@ export function LayetBoard({
       setHoveredCell(null);
       return;
     }
-    playArenaSfx('select', { volume: selectedUid === card.uid ? 0.45 : 0.62 });
+    playArenaSfx('select', { volume: selectedUid === card.uid ? 0.34 : 0.5 });
     setSelectedUid(card.uid);
   };
 
@@ -348,7 +348,7 @@ export function LayetBoard({
     if (!canInteract) return;
     const card = event.active?.data?.current?.card;
     if (!card) return;
-    playArenaSfx('select', { volume: 0.56, rate: 0.96 });
+    playArenaSfx('select', { volume: 0.46, rate: 0.98 });
     setActiveDragCard(card);
     if (!mustSacrifice) setSelectedUid(card.uid);
   };

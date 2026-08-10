@@ -3,7 +3,7 @@ import { getActionSfxTimeline } from '../audioEngine';
 describe('arena sound timeline', () => {
   test('plays a grounded placement sound for a normal card', () => {
     expect(getActionSfxTimeline({ type: 'play', owner: '0', captures: [] })).toEqual([
-      { name: 'place', delay: 0, volume: 1 },
+      { name: 'place', delay: 0, volume: 0.9 },
     ]);
   });
 
@@ -17,8 +17,8 @@ describe('arena sound timeline', () => {
       'flip',
       'capture',
     ]);
-    expect(timeline[1].delay).toBe(115);
-    expect(timeline[3].delay).toBe(299);
+    expect(timeline[1].delay).toBe(140);
+    expect(timeline[3].delay).toBe(356);
     expect(timeline[4].delay).toBeGreaterThan(timeline[3].delay);
   });
 
